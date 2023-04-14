@@ -1,0 +1,17 @@
+{
+	"id": "hooks",
+	"version": "1.0.0",
+	"name": "hooks",
+	"description": "Automatically run commands when server events occurred.",
+	"author": "OptiJava",
+	"link": "https://github.com/OptiJava/hooks",
+	"dependencies": {
+		"mcdreforged": ">=2.7.0"
+	},
+
+	"archive_name": "hooks-v{version}",
+	"resources": [
+		"lang",
+		"LICENSE"
+	]
+}

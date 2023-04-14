@@ -1,0 +1,11 @@
+hooks:
+  create:
+    success: '§a成功创建任务 §6{0}'
+    already_exist: '§4任务已存在！'
+
+  mount:
+    success: '§a成功将任务 §6{0} §a挂载到 §6{1}'
+    task_not_exist: '§4任务 §6{0} §4不存在'
+    hook_not_exist: '§4触发器 §6{0} §4未被挂载在此'
+    task_already_exist: '§4任务 §6{0} §4已经被挂载到这个触发器上了'
+    unmount: '§a成功从 §6{0} 卸载 §6{1}'

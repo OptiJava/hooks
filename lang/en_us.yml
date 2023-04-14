@@ -1,0 +1,11 @@
+hooks:
+  create:
+    success: '§aSuccessfully created task §6{0}'
+    already_exist: '§4The task is already exist!'
+
+  mount:
+    success: '§aSuccessfully mount §6{0} §ato §6{1}'
+    task_not_exist: '§4Task §6{0} §4is not exist!'
+    hook_not_exist: '§4Hook §6{0} §4did not be mounted here!'
+    task_already_exist: '§4Task §6{0} §4is already be mounted on this hook.'
+    unmount: '§aSuccessfully unmount §6{1} from §6{0}'
