@@ -1,5 +1,4 @@
 import os
-import tarfile
 from enum import Enum
 from typing import Dict, List
 
@@ -39,17 +38,12 @@ class TaskType(Enum):
     mcdr_command = 'mcdr_command'
 
 
-class Task:
+class Task(Serializable):
     name: str = 'undefined'
     
     task_type: TaskType = TaskType.undefined
     
     command: str = ''
-    
-    def __init__(self, name: str, task_type: TaskType, command: str):
-        self.name = name
-        self.task_type = task_type
-        self.command = command
     
     @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str):
@@ -67,6 +61,10 @@ class Task:
 
 
 class Configuration(Serializable):
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
     automatically: bool = True
     
     hooks: Dict[str, List[str]] = {
@@ -121,13 +119,14 @@ def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInt
     
     src.reply(RTextMCDRTranslation('hooks.mount.success', task, hook))
     h.append(task)
+    server.logger.info(f'Successfully mounted task {task}')
 
 
 def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
     h = config.hooks.get(hook)
     
     if h is None:
-        src.reply(RTextMCDRTranslation('hooks.mount.hooks_not_exist', hook))
+        src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
         return
     
     if task not in h:
@@ -136,6 +135,7 @@ def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerI
     
     src.reply(RTextMCDRTranslation('hooks.mount.unmount', hook, task))
     h.remove(task)
+    server.logger.info(f'Successfully unmounted task {task}')
 
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface):
@@ -143,15 +143,42 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
     
-    server.logger.info(server.rtr('hooks.create.success', name))
+    server.logger.info(f'Successfully created task {name}')
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
     
-    config.task[name] = Task(name, TaskType(task_type), command)
+    config.task[name] = Task(name=name, task_type=TaskType(task_type), command=command)
 
 
-def list(src: CommandSource, server: PluginServerInterface):
-    # TODO
-    pass
+def list_task(src: CommandSource):
+    rtext_list = RTextList()
+    
+    if len(config.task.values()) == 0:
+        rtext_list.append(RText('Nothing', color=RColor.dark_gray, styles=RStyle.italic))
+    
+    for t in config.task.values():
+        rtext_list.append(RText(t.name + '  ', color=RColor.red).h(t.task_type.name + ' -> ' + t.command))
+    
+    src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
+    
+    
+def list_mount(src: CommandSource):
+    src.reply(
+        RTextMCDRTranslation('hooks.list.mount',
+                             config.hooks.get(Hooks.on_plugin_loaded.value),
+                             config.hooks.get(Hooks.on_plugin_unloaded.value),
+                             config.hooks.get(Hooks.on_server_starting.value),
+                             config.hooks.get(Hooks.on_server_started.value),
+                             config.hooks.get(Hooks.on_server_stopped.value),
+                             config.hooks.get(Hooks.on_server_crashed.value),
+                             config.hooks.get(Hooks.on_mcdr_started.value),
+                             config.hooks.get(Hooks.on_mcdr_stopped.value),
+                             config.hooks.get(Hooks.on_player_joined.value),
+                             config.hooks.get(Hooks.on_player_left.value),
+                             config.hooks.get(Hooks.on_info.value),
+                             config.hooks.get(Hooks.on_user_info.value),
+                             config.hooks.get(Hooks.undefined.value),
+                             )
+    )
 
 
 ##################################################################
@@ -200,7 +227,14 @@ def on_load(server: PluginServerInterface, old_module):
         )
         .then(
             Literal('list')
-            .runs(lambda src: list(src, server))
+            .then(
+                Literal('task')
+                .runs(lambda src: list_task(src))
+            )
+            .then(
+                Literal('mount')
+                .runs(lambda src: list_mount(src))
+            )
         )
     )
     
