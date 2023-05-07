@@ -1,4 +1,5 @@
 import os
+import time
 from enum import Enum
 from io import StringIO
 from typing import List, Any
@@ -49,6 +50,11 @@ class Task(Serializable):
     
     @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None):
+        server.logger.debug(f'Executing task: {self.name}, task_type: {self.task_type}, command: {self.command}')
+        server.logger.debug(f'objects_dict: {str(var_dict)}')
+        
+        start_time = time.time()
+        
         if self.task_type == TaskType.undefined:
             server.logger.error(
                 f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} command: {self.command}')
@@ -90,6 +96,9 @@ class Task(Serializable):
                     command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
             server.execute_command(self.command)
+        
+        server.logger.debug(f'Task finished, name: {self.name}, task_type: {self.task_type}, command: {self.command}, '
+                            f'costs {time.time() - start_time} seconds.')
 
 
 class Configuration(Serializable):
@@ -98,7 +107,7 @@ class Configuration(Serializable):
         super().__init__(**kwargs)
     
     automatically: bool = True
-    
+
     hooks: dict[str, List[str]] = {
         'undefined': [],
         
@@ -128,10 +137,9 @@ config: Configuration
 @new_thread('hooks - trigger')
 def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     server.logger.debug(f'Triggered hooks {hook.value}')
+    server.logger.debug(f'objects_dict: {str(objects_dict)}')
     
-    finally_var_dict = None
-    
-    if objects_dict is not None:
+    if (objects_dict is not None) and (len(config.hooks.get(hook.value)) != 0):
         # 初始化最终变量字典
         finally_var_dict = dict()
         
@@ -154,12 +162,10 @@ def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict
                 var_inner_attr_value: Any = var_inner_attr_dict.get(var_inner_attr_key)
                 
                 finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
-    
-    if config.automatically:
+        
         server.logger.debug(f'Executing hook {hook.value}')
         # 遍历被挂载到此hook的task的key
         for i in config.hooks.get(hook.value):
-            server.logger.debug(f'Executing task {i}')
             # 执行任务
             config.task.get(i).execute_task(server, hook.value, finally_var_dict)
 
@@ -342,7 +348,8 @@ def on_user_info(server: PluginServerInterface, info: Info):
 
 
 def on_player_joined(server: PluginServerInterface, player: str, info: Info):
-    trigger_hooks(Hooks.on_player_joined, server, {'server': process_arg_server(server), 'info': info, 'player': player})
+    trigger_hooks(Hooks.on_player_joined, server,
+                  {'server': process_arg_server(server), 'info': info, 'player': player})
 
 
 def on_player_left(server: PluginServerInterface, player: str):
@@ -359,9 +366,11 @@ def on_server_startup(server: PluginServerInterface):
 
 def on_server_stop(server: PluginServerInterface, return_code: int):
     if return_code != 0:
-        trigger_hooks(Hooks.on_server_crashed, server, {'server': process_arg_server(server), 'return_code': return_code})
+        trigger_hooks(Hooks.on_server_crashed, server,
+                      {'server': process_arg_server(server), 'return_code': return_code})
     else:
-        trigger_hooks(Hooks.on_server_stopped, server, {'server': process_arg_server(server), 'return_code': return_code})
+        trigger_hooks(Hooks.on_server_stopped, server,
+                      {'server': process_arg_server(server), 'return_code': return_code})
 
 
 def on_mcdr_start(server: PluginServerInterface):
