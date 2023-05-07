@@ -54,7 +54,9 @@ class Task(Serializable):
                 f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} command: {self.command}')
             return
         
+        # shell
         if self.task_type == TaskType.shell_command:
+            # 生成参数
             command = StringIO()
             
             if var_dict is not None:
@@ -66,24 +68,26 @@ class Task(Serializable):
                     command.write('"')
                     command.write(str(var_dict.get(key)))
                     command.write('" && ')
-                    
+            
             command.write(self.command)
             
             os.system(command.getvalue())
         elif self.task_type == TaskType.server_command:
+            # 替换参数
             command = self.command
             
             if var_dict is not None:
                 for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', var_dict.get(key))
+                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
             server.execute(command)
         elif self.task_type == TaskType.mcdr_command:
+            # 替换参数
             command = self.command
             
             if var_dict is not None:
                 for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', var_dict.get(key))
+                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
             server.execute_command(self.command)
 
@@ -122,25 +126,42 @@ config: Configuration
 
 
 @new_thread('hooks - trigger')
-def trigger_hooks(hook: Hooks, server: PluginServerInterface, objs: dict[str, Any] = None):
+def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     server.logger.debug(f'Triggered hooks {hook.value}')
     
-    var_dict = None
+    finally_var_dict = None
     
-    if objs is not None:
-        var_dict = dict()
+    if objects_dict is not None:
+        # 初始化最终变量字典
+        finally_var_dict = dict()
         
-        for obj in objs.keys():
-            try:
-                for dict_of_obj_vars_keys in serializer.serialize(objs.get(obj)).keys():
-                    var_dict[obj + '_' + dict_of_obj_vars_keys] = serializer.serialize(objs.get(obj)).get(dict_of_obj_vars_keys)
-            except AttributeError:
-                pass
+        # 遍历所有已知对象
+        for an_object_key in objects_dict.keys():
+            
+            # 目前正在遍历对象的值
+            an_object_value: Any = objects_dict.get(an_object_key)
+            
+            # 目前正在遍历对象的内部属性字典
+            var_inner_attr_dict = serializer.serialize(an_object_value)
+            
+            if (not hasattr(var_inner_attr_dict, 'keys')) or (var_inner_attr_dict is None):
+                finally_var_dict[an_object_key] = an_object_value
+                continue
+            
+            # 正在遍历的对象的属性字典中的正在遍历的key
+            for var_inner_attr_key in var_inner_attr_dict.keys():
+                # 正在遍历的对象的属性字典中的正在遍历的key的value
+                var_inner_attr_value: Any = var_inner_attr_dict.get(var_inner_attr_key)
+                
+                finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
     
     if config.automatically:
+        server.logger.debug(f'Executing hook {hook.value}')
+        # 遍历被挂载到此hook的task的key
         for i in config.hooks.get(hook.value):
             server.logger.debug(f'Executing task {i}')
-            config.task.get(i).execute_task(server, hook.value, var_dict)
+            # 执行任务
+            config.task.get(i).execute_task(server, hook.value, finally_var_dict)
 
 
 ##################################################################
@@ -199,13 +220,15 @@ def list_task(src: CommandSource):
     
     if len(config.task.values()) == 0:
         rtext_list.append(RText('Nothing', color=RColor.dark_gray, styles=RStyle.italic))
+        src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
+        return
     
     for t in config.task.values():
         rtext_list.append(RText(t.name + '  ', color=RColor.red).h(t.task_type.name + ' -> ' + t.command))
     
     src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
-    
-    
+
+
 @new_thread('hooks - list')
 def list_mount(src: CommandSource):
     src.reply(
@@ -225,6 +248,23 @@ def list_mount(src: CommandSource):
                              config.hooks.get(Hooks.undefined.value),
                              )
     )
+
+
+def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
+    server.func_is_server_running = server.is_server_running()
+    server.func_is_server_startup = server.is_server_startup()
+    server.func_is_rcon_running = server.is_rcon_running()
+    server.func_get_server_pid = server.get_server_pid()
+    server.func_get_server_pid_all = server.get_server_pid_all()
+    server.func_get_server_information = str(serialize(server.get_server_information()))
+    server.func_get_data_folder = server.get_data_folder()
+    server.func_get_plugin_file_path = server.get_plugin_file_path('hooks')
+    server.func_get_plugin_list = str(server.get_plugin_list())
+    server.func_get_unloaded_plugin_list = str(server.get_unloaded_plugin_list())
+    server.func_get_disabled_plugin_list = str(server.get_disabled_plugin_list())
+    server.func_get_mcdr_language = server.get_mcdr_language()
+    server.func_get_mcdr_config = str(server.get_mcdr_config())
+    return server
 
 
 ##################################################################
@@ -284,49 +324,49 @@ def on_load(server: PluginServerInterface, old_module):
         )
     )
     
-    trigger_hooks(Hooks.on_plugin_loaded, server, {'server': server, 'old_module': old_module})
+    trigger_hooks(Hooks.on_plugin_loaded, server, {'server': process_arg_server(server), 'old_module': old_module})
 
 
 def on_unload(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': server})
+    trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
     server.save_config_simple(config)
 
 
 def on_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(Hooks.on_info, server, {'server': server, 'info': info})
+    trigger_hooks(Hooks.on_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_user_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(Hooks.on_user_info, server, {'server': server, 'info': info})
+    trigger_hooks(Hooks.on_user_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_player_joined(server: PluginServerInterface, player: str, info: Info):
-    trigger_hooks(Hooks.on_player_joined, server, {'server': server, 'info': info, 'player': player})
+    trigger_hooks(Hooks.on_player_joined, server, {'server': process_arg_server(server), 'info': info, 'player': player})
 
 
 def on_player_left(server: PluginServerInterface, player: str):
-    trigger_hooks(Hooks.on_player_left, server, {'server': server, 'player': player})
+    trigger_hooks(Hooks.on_player_left, server, {'server': process_arg_server(server), 'player': player})
 
 
 def on_server_start(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_server_starting, server, {'server': server})
+    trigger_hooks(Hooks.on_server_starting, server, {'server': process_arg_server(server)})
 
 
 def on_server_startup(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_started, server, {'server': server})
+    trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 
 
 def on_server_stop(server: PluginServerInterface, return_code: int):
     if return_code != 0:
-        trigger_hooks(Hooks.on_server_crashed, server, {'server': server, 'return_code': return_code})
+        trigger_hooks(Hooks.on_server_crashed, server, {'server': process_arg_server(server), 'return_code': return_code})
     else:
-        trigger_hooks(Hooks.on_server_stopped, server, {'server': server, 'return_code': return_code})
+        trigger_hooks(Hooks.on_server_stopped, server, {'server': process_arg_server(server), 'return_code': return_code})
 
 
 def on_mcdr_start(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_started, server, {'server': server})
+    trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 
 
 def on_mcdr_stop(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_stopped, server, {'server': server})
+    trigger_hooks(Hooks.on_mcdr_stopped, server, {'server': process_arg_server(server)})
