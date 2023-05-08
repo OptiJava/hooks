@@ -10,6 +10,9 @@ hooks:
     task_already_exist: '§4任务 §6{0} §4已经被挂载到这个触发器上了'
     unmount: '§a成功从 §6{0} 卸载 §6{1}'
 
+  delete:
+    success: '§a成功删除任务 §6{0}'
+
   list:
     task: |
       §6任务列表：

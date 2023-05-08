@@ -10,6 +10,9 @@ hooks:
     task_already_exist: '§4Task §6{0} §4is already be mounted on this hook.'
     unmount: '§aSuccessfully unmount §6{1} from §6{0}'
 
+  delete:
+    success: '§aSuccessfully deleted task §6{0}'
+
   list:
     task: |
       §6Task list：

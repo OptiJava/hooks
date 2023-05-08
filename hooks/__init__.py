@@ -107,7 +107,7 @@ class Configuration(Serializable):
         super().__init__(**kwargs)
     
     automatically: bool = True
-
+    
     hooks: dict[str, List[str]] = {
         'undefined': [],
         
@@ -134,11 +134,17 @@ class Configuration(Serializable):
 config: Configuration
 
 
-@new_thread('hooks - trigger')
 def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
-    server.logger.debug(f'Triggered hooks {hook.value}')
-    server.logger.debug(f'objects_dict: {str(objects_dict)}')
-    
+    try:
+        server.logger.debug(f'Triggered hooks {hook.value}')
+        server.logger.debug(f'objects_dict: {str(objects_dict)}')
+        _trigger_hooks(hook, server, objects_dict)
+    except Exception as e:
+        server.logger.exception(f'Unexpected exception when triggering hook {hook.value}', e)
+
+
+@new_thread('hooks - trigger')
+def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     if (objects_dict is not None) and (len(config.hooks.get(hook.value)) != 0):
         # 初始化最终变量字典
         finally_var_dict = dict()
@@ -165,9 +171,18 @@ def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict
         
         server.logger.debug(f'Executing hook {hook.value}')
         # 遍历被挂载到此hook的task的key
-        for i in config.hooks.get(hook.value):
+        for task in config.hooks.get(hook.value):
+            if config.task.get(task) is None:
+                server.logger.warning(f'Task {task} is not exist, unmount it from hook {hook.value}!')
+                config.hooks.get(hook.value).remove(task)
+                return
             # 执行任务
-            config.task.get(i).execute_task(server, hook.value, finally_var_dict)
+            try:
+                config.task.get(task).execute_task(server, hook.value, finally_var_dict)
+            except Exception as e:
+                server.logger.exception(
+                    f'Unexpected exception when executing task {task}, hook {hook.value}, task_type {config.task.get(task).task_type}, command {config.task.get(task).command}',
+                    e)
 
 
 ##################################################################
@@ -218,6 +233,18 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
     
     config.task[name] = Task(name=name, task_type=TaskType(task_type), command=command)
+
+
+@new_thread('hooks - delete')
+def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
+    if name not in config.task.keys():
+        src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
+        return
+    
+    server.logger.info(f'Successfully deleted task {name}')
+    src.reply(RTextMCDRTranslation('hooks.delete.success', name))
+    
+    config.task.pop(name)
 
 
 @new_thread('hooks - list')
@@ -315,6 +342,13 @@ def on_load(server: PluginServerInterface, old_module):
                     Text('hook')
                     .runs(lambda src, ctx: unmount_task(ctx['hook'], ctx['task'], src, server))
                 )
+            )
+        )
+        .then(
+            Literal('delete')
+            .then(
+                Text('task')
+                .runs(lambda src, ctx: delete_task(ctx['task'], src, server))
             )
         )
         .then(
