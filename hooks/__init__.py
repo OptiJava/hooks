@@ -138,17 +138,18 @@ def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict
     try:
         server.logger.debug(f'Triggered hooks {hook.value}')
         server.logger.debug(f'objects_dict: {str(objects_dict)}')
-        _trigger_hooks(hook, server, objects_dict)
+        if len(config.hooks.get(hook.value)) != 0:
+            _trigger_hooks(hook, server, objects_dict)
     except Exception as e:
         server.logger.exception(f'Unexpected exception when triggering hook {hook.value}', e)
 
 
 @new_thread('hooks - trigger')
 def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
-    if (objects_dict is not None) and (len(config.hooks.get(hook.value)) != 0):
-        # 初始化最终变量字典
-        finally_var_dict = dict()
-        
+    # 初始化最终变量字典
+    finally_var_dict = dict()
+    
+    if (objects_dict is not None) and (len(objects_dict.keys()) != 0):
         # 遍历所有已知对象
         for an_object_key in objects_dict.keys():
             
@@ -169,20 +170,20 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
                 
                 finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
         
-        server.logger.debug(f'Executing hook {hook.value}')
-        # 遍历被挂载到此hook的task的key
-        for task in config.hooks.get(hook.value):
-            if config.task.get(task) is None:
-                server.logger.warning(f'Task {task} is not exist, unmount it from hook {hook.value}!')
-                config.hooks.get(hook.value).remove(task)
-                return
-            # 执行任务
-            try:
-                config.task.get(task).execute_task(server, hook.value, finally_var_dict)
-            except Exception as e:
-                server.logger.exception(
-                    f'Unexpected exception when executing task {task}, hook {hook.value}, task_type {config.task.get(task).task_type}, command {config.task.get(task).command}',
-                    e)
+    server.logger.debug(f'Executing hook {hook.value}')
+    # 遍历被挂载到此hook的task的key
+    for task in config.hooks.get(hook.value):
+        if config.task.get(task) is None:
+            server.logger.warning(f'Task {task} is not exist, unmount it from hook {hook.value}!')
+            config.hooks.get(hook.value).remove(task)
+            return
+        # 执行任务
+        try:
+            config.task.get(task).execute_task(server, hook.value, finally_var_dict)
+        except Exception as e:
+            server.logger.exception(
+                f'Unexpected exception when executing task {task}, hook {hook.value}, task_type {config.task.get(task).task_type}, command {config.task.get(task).command}',
+                e)
 
 
 ##################################################################
@@ -194,7 +195,7 @@ def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInt
     h = config.hooks.get(hook)
     
     if h is None:
-        src.reply(RTextMCDRTranslation('hooks.mount.hooks_not_exist', hook))
+        src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
         return
     
     if task in h:
@@ -229,10 +230,16 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
     
+    try:
+        tsk_type = TaskType(task_type)
+    except ValueError:
+        src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
+        return
+    
+    config.task[name] = Task(name=name, task_type=tsk_type, command=command)
+    
     server.logger.info(f'Successfully created task {name}')
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
-    
-    config.task[name] = Task(name=name, task_type=TaskType(task_type), command=command)
 
 
 @new_thread('hooks - delete')
@@ -281,6 +288,12 @@ def list_mount(src: CommandSource):
                              config.hooks.get(Hooks.undefined.value),
                              )
     )
+
+
+def reload_config(src: CommandSource, server: PluginServerInterface):
+    server.load_config_simple(target_class=Configuration)
+    server.logger.info('Config reloaded.')
+    src.reply(RTextMCDRTranslation('hooks.reload.success'))
 
 
 def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
@@ -361,6 +374,10 @@ def on_load(server: PluginServerInterface, old_module):
                 Literal('mount')
                 .runs(lambda src: list_mount(src))
             )
+        )
+        .then(
+            Literal('reload')
+            .runs(lambda src: reload_config(src, server))
         )
     )
     
