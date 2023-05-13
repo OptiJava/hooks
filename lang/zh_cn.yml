@@ -14,6 +14,11 @@ hooks:
   delete:
     success: '§a成功删除任务 §6{0}'
 
+  man_run:
+    success: '§a成功运行任务 §6{0}'
+    task_not_exist: '§4任务不存在！'
+    illegal_env_json: '§4环境变量json格式错误或未预期的内部错误： {0}'
+
   reload:
     success: '§a成功重载配置'
 

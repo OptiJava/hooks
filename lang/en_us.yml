@@ -14,6 +14,11 @@ hooks:
   delete:
     success: '§aSuccessfully deleted task §6{0}'
 
+  man_run:
+    success: '§aSuccessfully ran task §6{0}'
+    task_not_exist: '§4Task not exist!'
+    illegal_env_json: '§4Invalid json format or unexpected exception: {0}'
+
   reload:
     success: '§aReloaded successfully!'
 

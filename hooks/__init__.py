@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from enum import Enum
@@ -135,6 +136,9 @@ config: Configuration
 
 
 def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+    if not config.automatically:
+        return
+    
     try:
         server.logger.debug(f'Triggered hooks {hook.value}')
         server.logger.debug(f'objects_dict: {str(objects_dict)}')
@@ -294,6 +298,26 @@ def reload_config(src: CommandSource, server: PluginServerInterface):
     server.load_config_simple(target_class=Configuration)
     server.logger.info('Config reloaded.')
     src.reply(RTextMCDRTranslation('hooks.reload.success'))
+    
+
+def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServerInterface):
+    if task not in config.task.keys():
+        src.reply(RTextMCDRTranslation('hooks.man_run.task_not_exist'))
+        return
+    
+    try:
+        env_dict: dict[str, str] = dict(json.loads(env_str))
+    except Exception as e:
+        src.reply(RTextMCDRTranslation('hooks.man_run.illegal_env_json', e))
+        return
+    
+    try:
+        config.task.get(task).execute_task(server, Hooks.undefined.value, env_dict)
+        src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
+    except Exception as e:
+        server.logger.exception(
+            f'Unexpected exception when executing task {task}, hook {Hooks.undefined.value}, task_type {config.task.get(task).task_type}, command {config.task.get(task).command}',
+            e)
 
 
 def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
@@ -378,6 +402,16 @@ def on_load(server: PluginServerInterface, old_module):
         .then(
             Literal('reload')
             .runs(lambda src: reload_config(src, server))
+        )
+        .then(
+            Literal('run')
+            .then(
+                Text('task')
+                .then(
+                    GreedyText('env')
+                    .runs(lambda src, ctx: man_run_task(ctx['task'], ctx['env'], src, server))
+                )
+            )
         )
     )
     
