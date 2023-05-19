@@ -107,35 +107,36 @@ class Configuration(Serializable):
     automatically: bool = True
 
 
-class TempConfig(Serializable):
+class TempConfig:
     
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self):
+        self.hooks = {
+            'undefined': [],
+            
+            'on_plugin_loaded': [],
+            'on_plugin_unloaded': [],
+            
+            'on_server_starting': [],
+            'on_server_started': [],
+            'on_server_stopped': [],
+            'on_server_crashed': [],
+            'on_mcdr_started': [],
+            'on_mcdr_stopped': [],
+            
+            'on_player_joined': [],
+            'on_player_left': [],
+            
+            'on_info': [],
+            'on_user_info': []
+        }
+        self.task = {}
     
-    hooks: dict[str, List[str]] = {
-        'undefined': [],
-        
-        'on_plugin_loaded': [],
-        'on_plugin_unloaded': [],
-        
-        'on_server_starting': [],
-        'on_server_started': [],
-        'on_server_stopped': [],
-        'on_server_crashed': [],
-        'on_mcdr_started': [],
-        'on_mcdr_stopped': [],
-        
-        'on_player_joined': [],
-        'on_player_left': [],
-        
-        'on_info': [],
-        'on_user_info': []
-    }
+    hooks: dict[str, List[str]]
     
-    task: dict[str, Task] = {}
+    task: dict[str, Task]
 
 
-temp_config: TempConfig = TempConfig()
+temp_config: TempConfig
 
 config: Configuration
 
@@ -203,12 +204,12 @@ def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInt
         return
     
     if task in h:
-        src.reply(RTextMCDRTranslation('hooks.mount.task_already_exist', task))
+        src.reply(RTextMCDRTranslation('hooks.mount.task_already_exist', task, hook))
         return
     
-    src.reply(RTextMCDRTranslation('hooks.mount.success', task, hook))
     h.append(task)
     server.logger.info(f'Successfully mounted task {task}')
+    src.reply(RTextMCDRTranslation('hooks.mount.success', task, hook))
 
 
 def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
@@ -222,9 +223,9 @@ def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerI
         src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', task))
         return
     
-    src.reply(RTextMCDRTranslation('hooks.mount.unmount', hook, task))
     h.remove(task)
     server.logger.info(f'Successfully unmounted task {task}')
+    src.reply(RTextMCDRTranslation('hooks.mount.unmount', hook, task))
 
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface):
@@ -249,10 +250,10 @@ def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
         src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
         return
     
+    temp_config.task.pop(name)
+    
     server.logger.info(f'Successfully deleted task {name}')
     src.reply(RTextMCDRTranslation('hooks.delete.success', name))
-    
-    temp_config.task.pop(name)
 
 
 @new_thread('hooks - list')
@@ -272,23 +273,12 @@ def list_task(src: CommandSource):
 
 @new_thread('hooks - list')
 def list_mount(src: CommandSource):
-    src.reply(
-        RTextMCDRTranslation('hooks.list.mount',
-                             temp_config.hooks.get(Hooks.on_plugin_loaded.value),
-                             temp_config.hooks.get(Hooks.on_plugin_unloaded.value),
-                             temp_config.hooks.get(Hooks.on_server_starting.value),
-                             temp_config.hooks.get(Hooks.on_server_started.value),
-                             temp_config.hooks.get(Hooks.on_server_stopped.value),
-                             temp_config.hooks.get(Hooks.on_server_crashed.value),
-                             temp_config.hooks.get(Hooks.on_mcdr_started.value),
-                             temp_config.hooks.get(Hooks.on_mcdr_stopped.value),
-                             temp_config.hooks.get(Hooks.on_player_joined.value),
-                             temp_config.hooks.get(Hooks.on_player_left.value),
-                             temp_config.hooks.get(Hooks.on_info.value),
-                             temp_config.hooks.get(Hooks.on_user_info.value),
-                             temp_config.hooks.get(Hooks.undefined.value),
-                             )
-    )
+    list_hooks: list = list()
+    
+    for hk in dict(Hooks.__members__).keys():
+        list_hooks.append(str(temp_config.hooks.get(str(hk))))
+    
+    src.reply(RTextMCDRTranslation('hooks.list.mount', *list_hooks))
 
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
@@ -296,6 +286,7 @@ def reload_config(src: CommandSource, server: PluginServerInterface):
     
     temp_config = TempConfig()
     config = server.load_config_simple(target_class=Configuration)
+    
     load_scripts(server)
     server.logger.info('Config reloaded.')
     src.reply(RTextMCDRTranslation('hooks.reload.success'))
@@ -326,7 +317,7 @@ def register_scripts(script_path: str):
     scripts_list[os.path.basename(script_path)] = script_path
 
 
-def parse_and_load_scripts(script: str, server: PluginServerInterface):
+def parse_and_apply_scripts(script: str, server: PluginServerInterface):
     # 读取
     with open(scripts_list.get(script), 'r') as f:
         content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
@@ -370,7 +361,7 @@ def load_scripts(server: PluginServerInterface):
     
     # 遍历所有已成功注册的脚本
     for script in scripts_list.keys():
-        parse_and_load_scripts(script, server)
+        parse_and_apply_scripts(script, server)
 
 
 def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
@@ -394,7 +385,6 @@ def on_load(server: PluginServerInterface, old_module):
     global config, scripts_folder, temp_config
     
     temp_config = TempConfig()
-    
     config = server.load_config_simple(target_class=Configuration)
     
     scripts_folder = os.path.join(server.get_data_folder(), 'scripts')
@@ -473,9 +463,11 @@ def on_load(server: PluginServerInterface, old_module):
 
 
 def on_unload(server: PluginServerInterface):
+    global temp_config
     trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
     server.save_config_simple(config)
+    temp_config = TempConfig()
 
 
 def on_info(server: PluginServerInterface, info: Info):

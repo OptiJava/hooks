@@ -8,7 +8,7 @@ hooks:
     success: '§aSuccessfully mount §6{0} §ato §6{1}'
     task_not_exist: '§4Task §6{0} §4is not exist!'
     hook_not_exist: '§4Hook §6{0} §4is not correct!'
-    task_already_exist: '§4Task §6{0} §4is already be mounted on this hook.'
+    task_already_exist: '§4Task §6{0} §4is already be mounted on §6{1} §4hook.'
     unmount: '§aSuccessfully unmount §6{1} from §6{0}'
 
   delete:
@@ -29,21 +29,21 @@ hooks:
 
     mount: |
       §6Mounting list：
-        §aon_plugin_loaded: §6{0}
-        §aon_plugin_unloaded： §6{1}
+        §aundefined: §6{0}
+        
+        §aon_plugin_loaded: §6{1}
+        §aon_plugin_unloaded： §6{2}
 
-        §aon_server_starting: §6{2}
-        §aon_server_started: §6{3}
-        §aon_server_stopped: §6{4}
-        §aon_server_crashed: §6{5}
+        §aon_server_starting: §6{3}
+        §aon_server_started: §6{4}
+        §aon_server_stopped: §6{5}
+        §aon_server_crashed: §6{6}
 
-        §aon_mcdr_started: §6{6}
-        §aon_mcdr_stopped: §6{7}
+        §aon_mcdr_started: §6{7}
+        §aon_mcdr_stopped: §6{8}
 
-        §aon_player_joined: §6{8}
-        §aon_player_left: §6{9}
+        §aon_player_joined: §6{9}
+        §aon_player_left: §6{10}
 
-        §aon_info: §6{10}
-        §aon_user_info: §6{11}
-
-        §aundefined: §6{12}
+        §aon_info: §6{11}
+        §aon_user_info: §6{12}

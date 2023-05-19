@@ -8,7 +8,7 @@ hooks:
     success: '§a成功将任务 §6{0} §a挂载到 §6{1}'
     task_not_exist: '§4任务 §6{0} §4不存在'
     hook_not_exist: '§4触发器 §6{0} §4不正确'
-    task_already_exist: '§4任务 §6{0} §4已经被挂载到这个触发器上了'
+    task_already_exist: '§4任务 §6{0} §4已经被挂载到 §6{1} §4触发器上了'
     unmount: '§a成功从 §6{0} 卸载 §6{1}'
 
   delete:
@@ -29,21 +29,21 @@ hooks:
 
     mount: |
       §6挂载列表：
-        §aon_plugin_loaded: §6{0}
-        §aon_plugin_unloaded： §6{1}
+        §aundefined: §6{0}
+        
+        §aon_plugin_loaded: §6{1}
+        §aon_plugin_unloaded： §6{2}
 
-        §aon_server_starting: §6{2}
-        §aon_server_started: §6{3}
-        §aon_server_stopped: §6{4}
-        §aon_server_crashed: §6{5}
+        §aon_server_starting: §6{3}
+        §aon_server_started: §6{4}
+        §aon_server_stopped: §6{5}
+        §aon_server_crashed: §6{6}
 
-        §aon_mcdr_started: §6{6}
-        §aon_mcdr_stopped: §6{7}
+        §aon_mcdr_started: §6{7}
+        §aon_mcdr_stopped: §6{8}
 
-        §aon_player_joined: §6{8}
-        §aon_player_left: §6{9}
+        §aon_player_joined: §6{9}
+        §aon_player_left: §6{10}
 
-        §aon_info: §6{10}
-        §aon_user_info: §6{11}
-    
-        §aundefined: §6{12}
+        §aon_info: §6{11}
+        §aon_user_info: §6{12}
