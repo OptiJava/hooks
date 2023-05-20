@@ -141,11 +141,45 @@ tasks:
 
 ### 所有可以在脚本中访问的属性列表
 
-**_TODO_**  ~~（其实就是懒）~~
+`server`对象：（适用于所有hooks）
+```
+server_func_is_server_running
+server_func_is_server_startup
+server_func_is_rcon_running
+server_func_get_server_pid
+server_func_get_server_pid_all
+server_func_get_server_information
+server_func_get_data_folder
+server_func_get_plugin_file_path
+server_func_get_plugin_list
+server_func_get_unloaded_plugin_list
+server_func_get_disabled_plugin_list
+server_func_get_mcdr_language
+server_func_get_mcdr_config
+```
 
-粗略判定方法：
+`info`对象：（适用于`on_info``on_user_info``on_player_joined`）
+```
+info_id
+info_hour
+info_min
+info_sec
+info_raw_content
+info_content
+info_player
+info_source
+info_logging_level
+```
 
-看插件源码，找到__init__.py，翻到最后，你会看到类似
+`player`对象：（适用于`on_player_joined``on_player_left`）（基本类型`str`）
+
+`return_code`对象：（适用于`on_server_stopped``on_server_crashed`）（基本类型int）
+
+**欢迎大佬补充**
+
+粗略判定所有能访问的参数的方法：
+
+看插件源码，找到`__init__.py`，翻到最后，你会看到类似
 ``````
 def on_mcdr_start(server: PluginServerInterface):
     trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
