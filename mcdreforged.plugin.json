@@ -12,6 +12,7 @@
 	"archive_name": "hooks-v{version}",
 	"resources": [
 		"lang",
-		"LICENSE"
+		"LICENSE",
+		"README.md"
 	]
 }
