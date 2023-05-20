@@ -2,7 +2,10 @@
 	"id": "hooks",
 	"version": "1.0.0",
 	"name": "hooks",
-	"description": "Automatically run commands when server events occurred.",
+	"description": {
+		"en_us": "Using scripts to automate server maintenance",
+		"zh_cn": "使用脚本自动化维护服务器"
+	},
 	"author": "OptiJava",
 	"link": "https://github.com/OptiJava/hooks",
 	"dependencies": {
