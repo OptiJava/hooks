@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import time
 from enum import Enum
 from io import StringIO
@@ -10,8 +11,6 @@ from mcdreforged.api.utils import serializer
 from ruamel import yaml
 
 scripts_folder: str = ''
-
-scripts_list: dict[str, str] = {}
 
 
 class Hooks(Enum):
@@ -59,7 +58,8 @@ class Task(Serializable):
         
         if self.task_type == TaskType.undefined:
             server.logger.error(
-                f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} command: {self.command}')
+                f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} '
+                f'command: {self.command}')
             return
         
         # shell
@@ -130,10 +130,13 @@ class TempConfig:
             'on_user_info': []
         }
         self.task = {}
+        self.scripts_list = {}
     
     hooks: dict[str, List[str]]
     
     task: dict[str, Task]
+    
+    scripts_list: dict[str, str]
 
 
 temp_config: TempConfig
@@ -177,10 +180,8 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
             for var_inner_attr_key in var_inner_attr_dict.keys():
                 # 正在遍历的对象的属性字典中的正在遍历的key的value
                 var_inner_attr_value: Any = var_inner_attr_dict.get(var_inner_attr_key)
-                
                 finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
     
-    server.logger.debug(f'Executing hook {hook.value}')
     # 遍历被挂载到此hook的task的key
     for task in temp_config.hooks.get(hook.value):
         if temp_config.task.get(task) is None:
@@ -192,7 +193,8 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
             temp_config.task.get(task).execute_task(server, hook.value, finally_var_dict)
         except Exception as e:
             server.logger.exception(
-                f'Unexpected exception when executing task {task}, hook {hook.value}, task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
+                f'Unexpected exception when executing task {task}, hook {hook.value}, '
+                f'task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
                 e)
 
 
@@ -249,6 +251,11 @@ def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
     if name not in temp_config.task.keys():
         src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
         return
+    
+    for hook in temp_config.hooks.keys():
+        for tasks_in_hook in temp_config.hooks.get(hook):
+            if tasks_in_hook == name:
+                unmount_task(hook, name, src, server)
     
     temp_config.task.pop(name)
     
@@ -308,32 +315,31 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
     except Exception as e:
         server.logger.exception(
-            f'Unexpected exception when executing task {task}, hook {Hooks.undefined.value}, task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
+            f'Unexpected exception when executing task {task}, hook {Hooks.undefined.value}, '
+            f'task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
             e)
 
 
-def register_scripts(script_path: str):
-    # 将绝对路径添加进入script_list
-    scripts_list[os.path.basename(script_path)] = script_path
-
-
 def parse_and_apply_scripts(script: str, server: PluginServerInterface):
-    # 读取
-    with open(scripts_list.get(script), 'r') as f:
-        content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
-    
-    for task in content.get('tasks').values():
-        # 创建task
-        create_task(task.get('task_type'), task.get('command'), task.get('name'), server.get_plugin_command_source(),
-                    server)
-        for hook in task.get('hooks'):
-            # 挂载
-            mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
+    try:
+        # 读取
+        with open(temp_config.scripts_list.get(script), 'r') as f:
+            content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
+        
+        for task in content.get('tasks').values():
+            # 创建task
+            create_task(task.get('task_type'), task.get('command'), task.get('name'),
+                        server.get_plugin_command_source(),
+                        server)
+            for hook in task.get('hooks'):
+                # 挂载
+                mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
+    except Exception as e:
+        server.logger.exception(f'Unexpected exception when parse or apply scripts {os.path.basename(script)}! Please '
+                                f'check your scripts.', e)
 
 
 def load_scripts(server: PluginServerInterface):
-    global scripts_list
-    
     if not os.path.isdir(scripts_folder):
         # 创建脚本目录
         os.makedirs(scripts_folder)
@@ -357,10 +363,10 @@ def load_scripts(server: PluginServerInterface):
     
     # 遍历所有文件
     for script_path in list_all_files(scripts_folder):
-        register_scripts(script_path)
+        temp_config.scripts_list[os.path.basename(script_path)] = script_path
     
     # 遍历所有已成功注册的脚本
-    for script in scripts_list.keys():
+    for script in temp_config.scripts_list.keys():
         parse_and_apply_scripts(script, server)
 
 
@@ -383,6 +389,11 @@ def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
 
 def on_load(server: PluginServerInterface, old_module):
     global config, scripts_folder, temp_config
+    
+    if platform.platform().__contains__('Windows') or os.name != 'posix':
+        server.logger.warning('#####################################################################################')
+        server.logger.warning('Some features of hooks plugin cannot be run on Windows, you have already been warned.')
+        server.logger.warning('#####################################################################################')
     
     temp_config = TempConfig()
     config = server.load_config_simple(target_class=Configuration)
@@ -492,7 +503,7 @@ def on_server_start(server: PluginServerInterface):
 
 
 def on_server_startup(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
+    trigger_hooks(Hooks.on_server_started, server, {'server': process_arg_server(server)})
 
 
 def on_server_stop(server: PluginServerInterface, return_code: int):
