@@ -21,6 +21,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install mcdreforged
+        pip install pytest
+
+    - name: Test
+      run: pytest ./test/test.py
 
     - name: Pack Plugin
       run: |
