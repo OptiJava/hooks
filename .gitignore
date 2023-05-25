@@ -1,2 +1,4 @@
 .idea/
 debug.sh
+
+test/.pytest_cache/

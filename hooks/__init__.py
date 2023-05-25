@@ -10,6 +10,9 @@ from mcdreforged.api.all import *
 from mcdreforged.api.utils import serializer
 from ruamel import yaml
 
+from hooks import utils
+from hooks.utils import process_arg_server
+
 scripts_folder: str = ''
 
 
@@ -40,6 +43,8 @@ class TaskType(Enum):
     shell_command = 'shell_command'
     server_command = 'server_command'
     mcdr_command = 'mcdr_command'
+    
+    python_code = 'python_code'
 
 
 class Task(Serializable):
@@ -55,6 +60,12 @@ class Task(Serializable):
         server.logger.debug(f'objects_dict: {str(var_dict)}')
         
         start_time = time.time()
+        
+        if self.command is None:
+            server.logger.error(
+                f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} '
+                f'command: {self.command}')
+            return
         
         if self.task_type == TaskType.undefined:
             server.logger.error(
@@ -94,7 +105,32 @@ class Task(Serializable):
                 for key in var_dict.keys():
                     command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
-            server.execute_command(self.command)
+            server.execute_command(command)
+            
+        elif self.task_type == TaskType.python_code:
+            # 注入变量
+            finally_command = self.command
+            
+            # 要被注入的赋值语句
+            command_input = StringIO()
+            
+            if var_dict is not None:
+                for key in var_dict.keys():
+                    command_input.write(key)
+                    command_input.write('=')
+                    
+                    var_value = var_dict.get(key)
+                    
+                    if (not utils.is_int_var(var_value)) and (not utils.is_list_var(var_value)) and (not utils.is_dict_var(var_value)):
+                        var_value = '"' + str(var_value) + '"'
+                    
+                    command_input.write(str(var_value))
+                    command_input.write(';')
+            command_input.write('\n')
+            
+            finally_command = finally_command.replace('# variable injection here', command_input.getvalue())
+            
+            exec(finally_command)
         
         server.logger.debug(f'Task finished, name: {self.name}, task_type: {self.task_type}, command: {self.command}, '
                             f'costs {time.time() - start_time} seconds.')
@@ -368,23 +404,6 @@ def load_scripts(server: PluginServerInterface):
     # 遍历所有已成功注册的脚本
     for script in temp_config.scripts_list.keys():
         parse_and_apply_scripts(script, server)
-
-
-def process_arg_server(server: PluginServerInterface) -> PluginServerInterface:
-    server.func_is_server_running = server.is_server_running()
-    server.func_is_server_startup = server.is_server_startup()
-    server.func_is_rcon_running = server.is_rcon_running()
-    server.func_get_server_pid = server.get_server_pid()
-    server.func_get_server_pid_all = server.get_server_pid_all()
-    server.func_get_server_information = str(serialize(server.get_server_information()))
-    server.func_get_data_folder = server.get_data_folder()
-    server.func_get_plugin_file_path = server.get_plugin_file_path('hooks')
-    server.func_get_plugin_list = str(server.get_plugin_list())
-    server.func_get_unloaded_plugin_list = str(server.get_unloaded_plugin_list())
-    server.func_get_disabled_plugin_list = str(server.get_disabled_plugin_list())
-    server.func_get_mcdr_language = server.get_mcdr_language()
-    server.func_get_mcdr_config = str(server.get_mcdr_config())
-    return server
 
 
 def on_load(server: PluginServerInterface, old_module):
