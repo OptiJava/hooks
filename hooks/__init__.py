@@ -90,6 +90,7 @@ class Task(Serializable):
             command.write(self.command)
             
             os.system(command.getvalue())
+        # mc command
         elif self.task_type == TaskType.server_command:
             # 替换参数
             command = self.command
@@ -98,6 +99,7 @@ class Task(Serializable):
                     command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
             server.execute(command)
+        # mcdr command
         elif self.task_type == TaskType.mcdr_command:
             # 替换参数
             command = self.command
@@ -106,7 +108,8 @@ class Task(Serializable):
                     command = command.replace('{$' + key + '}', str(var_dict.get(key)))
             
             server.execute_command(command)
-            
+        
+        # python code
         elif self.task_type == TaskType.python_code:
             if obj_dict is not None:
                 exec(self.command, obj_dict, {})
@@ -343,9 +346,15 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
         for task in content.get('tasks').values():
+            cmd_file_path = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+            
+            if not os.path.isfile(cmd_file_path):
+                server.logger.warning(f'Script path for task {task.get("name")} is invalid! {task.get("command_file")}')
+            
             if (task.get('command_file') is not None) and (len(task.get('command_file')) > 0) and \
-                    (os.path.isfile(task.get('command_file'))):
-                with open(task.get('command_file'), 'r') as command_file:
+                    (os.path.isfile(cmd_file_path)):
+                with open(cmd_file_path, 'r') \
+                        as command_file:
                     command_file_content = command_file.read()
                 # 创建task
                 create_task(task.get('task_type'), command_file_content, task.get('name'),

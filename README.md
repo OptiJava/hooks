@@ -91,7 +91,7 @@ tasks:
     name: motd  # 声明task的名字，别有空格
     task_type: shell_command  # 任务类型
     command: date   # 要执行的指令
-    command_file: /home/aaa/.../script.txt（脚本内容路径，如果此路径有效，插件将从command_file中读取command并执行，执行的指令即文件的所有内容（文件扩展名随意写，插件并非直接执行此文件，而是将文件内容读到内存处理后再执行）。command_file和command只用写一个，command_file如果写了command项就会被忽略）
+    command_file: {hooks_config_path}/scripts/script.txt（脚本内容路径，如果此路径有效，插件将从command_file中读取command并执行，执行的指令即文件的所有内容（文件扩展名随意写，插件并非直接执行此文件，而是将文件内容读到内存处理后再执行）。command_file和command只用写一个，command_file如果写了command项就会被忽略）。{hooks_config_path}会被替换为hooks插件的配置文件目录，即server.get_data_folder()
     hooks:   # 要挂载到的hook，必须是数组
       - on_server_started
       - on_mcdr_started
@@ -135,7 +135,7 @@ tasks:
 
 `python_code`：
 - 直接编写python代码即可，无需定义函数啥的
-- mcdr的所有实例、属性以及函数全都可以随意调用，在`exec()`时已经传入所有`globals()`和`locals()`
+- mcdr的所有实例、属性以及函数全都可以随意调用，在`exec()`时已经传入所有对象，例如`server`，你可以直接`server.is_server_running()`这样调用
 - 没有手动补参
 
 ### “获取”函数值
