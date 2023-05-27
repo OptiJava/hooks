@@ -55,7 +55,7 @@ class Task(Serializable):
     command: str = ''
     
     @new_thread('hooks - execute')
-    def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None):
+    def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
         server.logger.debug(f'Executing task: {self.name}, task_type: {self.task_type}, command: {self.command}')
         server.logger.debug(f'objects_dict: {str(var_dict)}')
         
@@ -108,33 +108,11 @@ class Task(Serializable):
             server.execute_command(command)
             
         elif self.task_type == TaskType.python_code:
-            # 注入变量
-            finally_command = self.command
+            if obj_dict is not None:
+                exec(self.command, obj_dict, {})
+            else:
+                exec(self.command, var_dict, locals())
             
-            # 要被注入的赋值语句
-            command_input = StringIO()
-            
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command_input.write(key)
-                    command_input.write('=')
-                    
-                    var_value = var_dict.get(key)
-                    
-                    if (not utils.is_int_var(var_value)) and (not utils.is_list_var(var_value)) and (not utils.is_dict_var(var_value)):
-                        if str(var_value).__contains__('"'):
-                            var_value = "'" + str(var_value) + "'"
-                        else:
-                            var_value = '"' + str(var_value) + '"'
-                    
-                    command_input.write(str(var_value))
-                    command_input.write(';')
-            command_input.write('\n')
-            
-            finally_command = finally_command.replace('# variable injection here', command_input.getvalue())
-            
-            exec(finally_command)
-        
         server.logger.debug(f'Task finished, name: {self.name}, task_type: {self.task_type}, command: {self.command}, '
                             f'costs {time.time() - start_time} seconds.')
 
@@ -204,13 +182,11 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
     if (objects_dict is not None) and (len(objects_dict.keys()) != 0):
         # 遍历所有已知对象
         for an_object_key in objects_dict.keys():
-            
             # 目前正在遍历对象的值
             an_object_value: Any = objects_dict.get(an_object_key)
-            
             # 目前正在遍历对象的内部属性字典
             var_inner_attr_dict = serializer.serialize(an_object_value)
-            
+            # 判断var_inner_attr_dict是否为基本类型
             if (not hasattr(var_inner_attr_dict, 'keys')) or (var_inner_attr_dict is None):
                 finally_var_dict[an_object_key] = an_object_value
                 continue
@@ -219,6 +195,7 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
             for var_inner_attr_key in var_inner_attr_dict.keys():
                 # 正在遍历的对象的属性字典中的正在遍历的key的value
                 var_inner_attr_value: Any = var_inner_attr_dict.get(var_inner_attr_key)
+                # 整合进入finally_var_dict
                 finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
     
     # 遍历被挂载到此hook的task的key
@@ -229,7 +206,7 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
             return
         # 执行任务
         try:
-            temp_config.task.get(task).execute_task(server, hook.value, finally_var_dict)
+            temp_config.task.get(task).execute_task(server, hook.value, finally_var_dict, obj_dict=objects_dict)
         except Exception as e:
             server.logger.exception(
                 f'Unexpected exception when executing task {task}, hook {hook.value}, '
@@ -350,7 +327,7 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
     
     try:
-        temp_config.task.get(task).execute_task(server, Hooks.undefined.value, env_dict)
+        temp_config.task.get(task).execute_task(server, Hooks.undefined.value, var_dict=env_dict, obj_dict=env_dict)
         src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
     except Exception as e:
         server.logger.exception(
@@ -366,7 +343,8 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
         for task in content.get('tasks').values():
-            if (task.get('command_file') is not None) and (len(task.get('command_file')) > 0) and (os.path.isfile(task.get('command_file'))):
+            if (task.get('command_file') is not None) and (len(task.get('command_file')) > 0) and \
+                    (os.path.isfile(task.get('command_file'))):
                 with open(task.get('command_file'), 'r') as command_file:
                     command_file_content = command_file.read()
                 # 创建task
