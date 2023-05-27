@@ -2,15 +2,13 @@
 
 > 为各种脚本提供了一些触发器和接口，让mcdr自动根据某些条件触发脚本，更方便的使用全自动化管理脚本去做各种事情
 
-追求服务器管理、维护全自动化！
+追求服务器管理、维护全自动化！！！ ~~其实就是懒的维护~~
 
 **_目前此插件部分功能无法在Windows上使用！如果在非posix操作系统上使用此插件，会在加载插件时收到警告。_**
 
-
-
 ## 目的
 
-有时，我们想要使用shell脚本管理服务器，但是不方便去让mc服务器全自动触发这些shell脚本，这个插件就是为了能更方便的使用各种脚本全自动维护/管理服务器
+有时，我们想要使用shell脚本管理服务器，但是不方便去让mc服务器全自动触发这些shell脚本，这个插件就是为了能更方便的使用各种脚本全自动维护/管理服务器，而无需为此特意编写一个mcdr插件，无需重复造轮子
 
 他可以为shell脚本提供一系列的“钩子”（也就是hooks），还有许多接口，让脚本的可定制化程度更高
 
@@ -20,17 +18,21 @@
 
 1.`Task`（任务）
 \
-Task就是一个任务，任务是可执行的（可被手动执行也可以被自动执行）。目前支持三个任务类型（task_type）`shell_command`（shell指令） `server_command`（mc指令） `mcdr_command`（mcdr命令）
+Task就是一个任务，任务是可执行的（可被手动执行也可以被自动执行）。目前支持四个任务类型（task_type）`shell_command`（shell指令） `server_command`（mc指令） `mcdr_command`（mcdr命令） `python_code`（python代码）
 
 2.`Hooks`（钩子）
 \
 插件内置了很多“钩子”，Hook是可以被触发的，一个Task可以被挂载（mount）到一个或多个Hooks下，也可以从一个hook中卸载（unmount）。一旦一个hook被触发，其下被挂载的所有Task全部会被执行（异步）。例如`on_server_started`会在mc服务端完全启动成功时被触发，其下挂载的所有任务会被异步执行
 
-3.`Script`（脚本）
+3.`Mount`（挂载） `Unmount`（卸载）
+\
+把一个`Task`挂载到一个`hook`，即代表这个`hook`被触发时，此`task`会被执行
+
+4.`Script`（脚本）
 \
 这里说的脚本是这个插件可以识别的yaml格式的脚本文件，脚本应放在`config/hooks/scripts`文件夹中。在插件被加载时或`!!hooks reload`指令被执行时，那个文件夹及子文件夹里面的所有脚本文件全部会被加载（注意是加载不是应用）
 
-4.`Apply`（应用）
+5.`Apply`（应用）
 \
 Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作**，加载在前，应用在后
 
@@ -47,7 +49,7 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 - 创建一个任务
 
 - `name` 就是这个任务的名字
-- `task_type` 就是你要执行的脚本的类型，有以下几种选择：`shell_command`（shell脚本）、`server_command`（mc指令）、`mcdr_command`（mcdr指令）
+- `task_type` 就是你要执行的脚本的类型，有以下几种选择：`shell_command`（shell脚本）、`server_command`（mc指令）、`mcdr_command`（mcdr指令）、`python_code`（python代码）
 - `command` 要执行的指令，例如`./cleanup.sh`或`echo awa`或`say hello`或`!!qb make auto_backup`（写啥指令取决于你的任务类型，注意别写错了）
 
 `!!hooks mount <task> <hook>`
@@ -89,8 +91,10 @@ tasks:
     name: motd  # 声明task的名字，别有空格
     task_type: shell_command  # 任务类型
     command: date   # 要执行的指令
+    command_file: /home/aaa/.../script.txt（脚本内容路径，如果此路径有效，插件将从command_file中读取command并执行，执行的指令即文件的所有内容（文件扩展名随意写，插件并非直接执行此文件，而是将文件内容读到内存处理后再执行）。command_file和command只用写一个，command_file如果写了command项就会被忽略）
     hooks:   # 要挂载到的hook，必须是数组
       - on_server_started
+      - on_mcdr_started
 ``````
 
 将其命名为`<脚本名字>.yaml`，并且放到`config/hooks/scripts`文件夹或子文件夹中
@@ -129,11 +133,16 @@ tasks:
 - 注意：不同的hook传递不同类型的对象
 - 跟`server_command`访问方法完全一样 ~~连代码都一样~~
 
+`python_code`：
+- 直接编写python代码即可，无需定义函数啥的
+- mcdr的所有实例、属性以及函数全都可以随意调用，在`exec()`时已经传入所有`globals()`和`locals()`
+- 没有手动补参
+
 ### “获取”函数值
 
 如果你看了mcdr源代码，你会发现，其实很多信息是要调用函数才可以获取到的，只能访问属性还不够，例如`PluginServerInterface.is_server_running()`，那怎样才能在脚本中调用无参函数并获取返回值呢？
 
-我想到的~~坏~~方法是这样的：首先在执行脚本前，先把一些关键的、常用的无参函数调用一遍，并且把他们的值缓存起来，然后把这些值绑定进入那个对象，绑定的这个属性就叫做`func_`+`函数的名字`，这样就成功的实现了函数->属性的转变。我绑定进去的这些属性会随着这个对象的其他属性一起被“拆包”然后放入对应的各个环境变量中，供脚本访问。
+我想到的~~坏~~方法是这样的：首先在执行脚本前，先把一些关键的、常用的无参函数调用一遍，并且把他们的值缓存起来，然后把这些值绑定进入那个对象，绑定的这个属性就叫做`func_`+`函数的名字`，这样就成功的实现了函数->属性的转变。我绑定进去的这些属性会随着这个对象的其他属性一起被拆包、解析、处理然后放入对应的各个环境变量中，供脚本访问，我愿称之为“手动补参”
 
 以shell格式脚本为例：`PluginServerInterface`中有函数`is_server_running()`，你想要访问他，就需要使用`$server_func_is_server_running`访问
 
@@ -173,7 +182,7 @@ info_logging_level
 
 `player`对象：（适用于`on_player_joined``on_player_left`）（基本类型`str`）
 
-`return_code`对象：（适用于`on_server_stopped``on_server_crashed`）（基本类型int）
+`return_code`对象：（适用于`on_server_stopped``on_server_crashed`）（基本类型`int`）
 
 **欢迎大佬补充**
 
@@ -185,3 +194,14 @@ def on_mcdr_start(server: PluginServerInterface):
     trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 ``````
 这样的代码，先看函数名`on_mcdr_start`，就能大致判断这块代码负责触发`on_mcdr_started`，再看`trigger_hooks(...)`，括号里面的最后一个参数是一个`dict`，只有一个`server`键对值，说明最终脚本可以访问到的参数全都在`PluginServerInterface`类中，然后看就完了（（（（逃
+
+## hooks脚本相比mcdr插件的优势与劣势
+
+优势：
+- 可以非常方便的热插拔各种任务以及任务被触发的条件
+- 使简单的脚本任务，编写起来更加简单，API的使用也更加简单（？
+- 原生支持多种类型的脚本，例如`shell`，使服务器管理更加方便
+
+劣势：
+- 不如mcdr插件的可扩展性高
+- 复杂的脚本任务，编写起来也更加困难，所以编写复杂的任务还不如编写mcdr插件（（
