@@ -122,7 +122,10 @@ class Task(Serializable):
                     var_value = var_dict.get(key)
                     
                     if (not utils.is_int_var(var_value)) and (not utils.is_list_var(var_value)) and (not utils.is_dict_var(var_value)):
-                        var_value = '"' + str(var_value) + '"'
+                        if str(var_value).__contains__('"'):
+                            var_value = "'" + str(var_value) + "'"
+                        else:
+                            var_value = '"' + str(var_value) + '"'
                     
                     command_input.write(str(var_value))
                     command_input.write(';')
@@ -363,10 +366,19 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
         for task in content.get('tasks').values():
-            # 创建task
-            create_task(task.get('task_type'), task.get('command'), task.get('name'),
-                        server.get_plugin_command_source(),
-                        server)
+            if (task.get('command_file') is not None) and (len(task.get('command_file')) > 0) and (os.path.isfile(task.get('command_file'))):
+                with open(task.get('command_file'), 'r') as command_file:
+                    command_file_content = command_file.read()
+                # 创建task
+                create_task(task.get('task_type'), command_file_content, task.get('name'),
+                            server.get_plugin_command_source(),
+                            server)
+            else:
+                # 创建task
+                create_task(task.get('task_type'), task.get('command'), task.get('name'),
+                            server.get_plugin_command_source(),
+                            server)
+                
             for hook in task.get('hooks'):
                 # 挂载
                 mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
