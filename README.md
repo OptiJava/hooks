@@ -86,9 +86,8 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 
 首先要编写脚本，示例：
 ``````
-tasks:
-  motd:  # 声明一个task（其实这个你可以随便写，task的名字取决于name）
-    name: motd  # 声明task的名字，别有空格
+tasks:  
+  - name: motd  # 声明task的名字，别有空格
     task_type: shell_command  # 任务类型
     command: date   # 要执行的指令
     command_file: {hooks_config_path}/scripts/script.txt（脚本内容路径，如果此路径有效，插件将从command_file中读取command并执行，执行的指令即文件的所有内容（文件扩展名随意写，插件并非直接执行此文件，而是将文件内容读到内存处理后再执行）。command_file和command只用写一个，command_file如果写了command项就会被忽略）。{hooks_config_path}会被替换为hooks插件的配置文件目录，即server.get_data_folder()
