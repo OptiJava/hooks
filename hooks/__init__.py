@@ -254,6 +254,9 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
     
+    if name is None:
+        return
+    
     try:
         tsk_type = TaskType(task_type)
     except ValueError:
@@ -346,15 +349,22 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
         for task in content.get('tasks'):
-            cmd_file_path = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+            use_cmd_file: bool = False
+            cmd_file_path: str = ''
             
-            if not os.path.isfile(cmd_file_path):
-                server.logger.warning(f'Script path for task {task.get("name")} is invalid! {task.get("command_file")}')
+            if task.get('command_file') is not None:
+                tmp_var1 = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+                
+                if os.path.isfile(tmp_var1):
+                    cmd_file_path = tmp_var1
+                    use_cmd_file = True
+                else:
+                    server.logger.warning(
+                        f'Script path for task {task.get("name")} is invalid, use command instead! '
+                        f'{task.get("command_file")}')
             
-            if (task.get('command_file') is not None) and (len(task.get('command_file')) > 0) and \
-                    (os.path.isfile(cmd_file_path)):
-                with open(cmd_file_path, 'r') \
-                        as command_file:
+            if use_cmd_file:
+                with open(cmd_file_path, 'r') as command_file:
                     command_file_content = command_file.read()
                 # 创建task
                 create_task(task.get('task_type'), command_file_content, task.get('name'),
