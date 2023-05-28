@@ -1,7 +1,14 @@
+import platform
 from typing import Any
 
 from mcdreforged.api.types import PluginServerInterface
 from mcdreforged.api.utils.serializer import serialize
+
+
+def is_windows() -> bool:
+    if platform.platform().__contains__('Windows'):
+        return True
+    return False
 
 
 def is_int_var(obj: Any) -> bool:

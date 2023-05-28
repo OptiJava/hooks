@@ -1,6 +1,5 @@
 import json
 import os
-import platform
 import time
 from enum import Enum
 from io import StringIO
@@ -418,16 +417,18 @@ def load_scripts(server: PluginServerInterface):
 def on_load(server: PluginServerInterface, old_module):
     global config, scripts_folder, temp_config
     
-    if platform.platform().__contains__('Windows') or os.name != 'posix':
-        server.logger.warning('#####################################################################################')
-        server.logger.warning('Some features of hooks plugin cannot be run on Windows, you have already been warned.')
-        server.logger.warning('#####################################################################################')
-    
     temp_config = TempConfig()
     config = server.load_config_simple(target_class=Configuration)
     
     scripts_folder = os.path.join(server.get_data_folder(), 'scripts')
     load_scripts(server)
+    
+    if utils.is_windows():
+        server.logger.warning('#####################################################################################')
+        server.logger.warning('#####################################################################################')
+        server.logger.warning('Some features of hooks plugin cannot be run on Windows, you have already been warned.')
+        server.logger.warning('#####################################################################################')
+        server.logger.warning('#####################################################################################')
     
     server.register_command(
         Literal('!!hooks')

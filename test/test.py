@@ -84,5 +84,9 @@ def test_type_int_detect():
     assert utils.is_int_var(input_bool) is False
 
 
+def test_is_windows():
+    print(utils.is_windows())
+
+
 if __name__ == "__main__":
     pytest.main()
