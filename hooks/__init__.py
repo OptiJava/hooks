@@ -345,7 +345,7 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
         with open(temp_config.scripts_list.get(script), 'r') as f:
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
-        for task in content.get('tasks').values():
+        for task in content.get('tasks'):
             cmd_file_path = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
             
             if not os.path.isfile(cmd_file_path):
