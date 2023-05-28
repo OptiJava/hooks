@@ -1,7 +1,7 @@
 from typing import Any
 
-from mcdreforged.plugin.server_interface import PluginServerInterface
-from mcdreforged.utils.serializer import serialize
+from mcdreforged.api.types import PluginServerInterface
+from mcdreforged.api.utils.serializer import serialize
 
 
 def is_int_var(obj: Any) -> bool:
