@@ -204,3 +204,37 @@ def on_mcdr_start(server: PluginServerInterface):
 劣势：
 - 不如mcdr插件的可扩展性高
 - 复杂的脚本任务，编写起来也更加困难，所以编写复杂的任务还不如编写mcdr插件（（
+
+## 实例
+
+### 1. 玩家非正常退出报告
+
+首先编写python代码：
+
+`config/hooks/scripts/player_connect_err_printer/script.py`
+```
+from mcdreforged.api.all import *
+
+if info.content.__contains__('lost connection: ') \
+        and not info.content.endswith('Disconnected') \
+        and not info.content.endswith('Killed'):
+    server.tell('@a', RTextList(
+        RText('检测到玩家非正常退出：', color=RColor.red),
+        RText(info.content, color=RColor.yellow).c(RAction.copy_to_clipboard, info.content).h('点击复制到剪贴板'),
+    ))
+```
+
+编写脚本声明：
+
+`config/hooks/scripts/player_connect_err_printer/player_connect_err_printer.yaml`
+```
+tasks:
+  - name: player_connect_err_printer
+    task_type: python_code
+    command_file: '{hooks_config_path}/scripts/player_connect_err_printer/script.py'
+    hooks:
+      - on_info
+```
+
+上传好脚本后，命令行输入`!!hooks reload`即可awa
+
