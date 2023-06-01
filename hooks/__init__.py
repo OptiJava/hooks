@@ -3,14 +3,12 @@ import os
 import time
 from enum import Enum
 from io import StringIO
-from typing import List, Any, Union
+from typing import List, Union
 
 from mcdreforged.api.all import *
-from mcdreforged.api.utils import serializer
 from ruamel import yaml
 
-from hooks import utils
-from hooks.utils import process_arg_server
+from hooks.utils import *
 
 scripts_folder: str = ''
 
@@ -187,7 +185,7 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
             # 目前正在遍历对象的值
             an_object_value: Any = objects_dict.get(an_object_key)
             # 目前正在遍历对象的内部属性字典
-            var_inner_attr_dict = serializer.serialize(an_object_value)
+            var_inner_attr_dict = serialize(an_object_value)
             # 判断var_inner_attr_dict是否为基本类型
             if (not hasattr(var_inner_attr_dict, 'keys')) or (var_inner_attr_dict is None):
                 finally_var_dict[an_object_key] = an_object_value
