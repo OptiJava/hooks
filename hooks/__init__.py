@@ -458,6 +458,7 @@ def on_load(server: PluginServerInterface, old_module):
                     Text('task_type')
                     .then(
                         GreedyText('command')
+                        .requires(lambda src: src.has_permission(3))
                         .runs(lambda src, ctx: create_task(ctx['task_type'], ctx['command'], ctx['name'], src, server))
                     )
                 )
@@ -469,6 +470,7 @@ def on_load(server: PluginServerInterface, old_module):
                 Text('task')
                 .then(
                     Text('hook')
+                    .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: mount_task(ctx['hook'], ctx['task'], src, server))
                 )
             )
@@ -479,6 +481,7 @@ def on_load(server: PluginServerInterface, old_module):
                 Text('task')
                 .then(
                     Text('hook')
+                    .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: unmount_task(ctx['hook'], ctx['task'], src, server))
                 )
             )
@@ -487,6 +490,7 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('delete')
             .then(
                 Text('task')
+                .requires(lambda src: src.has_permission(3))
                 .runs(lambda src, ctx: delete_task(ctx['task'], src, server))
             )
         )
@@ -494,19 +498,23 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('list')
             .then(
                 Literal('task')
+                .requires(lambda src: src.has_permission(3))
                 .runs(lambda src: list_task(src))
             )
             .then(
                 Literal('mount')
+                .requires(lambda src: src.has_permission(3))
                 .runs(lambda src: list_mount(src))
             )
             .then(
                 Literal('scripts')
+                .requires(lambda src: src.has_permission(3))
                 .runs(lambda src: list_scripts(src))
             )
         )
         .then(
             Literal('reload')
+            .requires(lambda src: src.has_permission(3))
             .runs(lambda src: reload_config(src, server))
         )
         .then(
@@ -515,6 +523,7 @@ def on_load(server: PluginServerInterface, old_module):
                 Text('task')
                 .then(
                     GreedyText('env')
+                    .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: man_run_task(ctx['task'], ctx['env'], src, server))
                 )
             )
