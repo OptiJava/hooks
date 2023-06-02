@@ -49,6 +49,8 @@ class Task(Serializable):
     
     task_type: TaskType = TaskType.undefined
     
+    created_by: str = 'undefined'
+    
     command: str = ''
     
     @new_thread('hooks - execute')
@@ -246,12 +248,13 @@ def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerI
     src.reply(RTextMCDRTranslation('hooks.mount.unmount', hook, task))
 
 
-def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface):
+def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
+                created_by=None):
     if name in temp_config.task:
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
     
-    if name is None:
+    if name is None or len(name) == 0:
         return
     
     try:
@@ -260,7 +263,10 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
         return
     
-    temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command)
+    if created_by is None:
+        created_by = str(src)
+    
+    temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
     
     server.logger.info(f'Successfully created task {name}')
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
@@ -292,8 +298,11 @@ def list_task(src: CommandSource):
         return
     
     for t in temp_config.task.values():
-        rtext_list.append(RText(t.name + '  ', color=RColor.red).h(t.task_type.name + ' -> ' + t.command))
-    
+        rtext_list.append(RTextList(
+            RText('\n  '),
+            RText(t.name, color=RColor.red).h(t.task_type.name),
+            RText(f'  created by: "{t.created_by}"', color=RColor.green)
+        ))
     src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
 
 
@@ -305,6 +314,19 @@ def list_mount(src: CommandSource):
         list_hooks.append(str(temp_config.hooks.get(str(hk))))
     
     src.reply(RTextMCDRTranslation('hooks.list.mount', *list_hooks))
+    
+
+@new_thread('hooks - list')
+def list_scripts(src: CommandSource):
+    rtext_list = RTextList()
+    
+    for scr in temp_config.scripts_list.keys():
+        rtext_list.append(RText(scr + '  ', color=RColor.red).h(temp_config.scripts_list.get(scr)))
+    
+    if rtext_list.is_empty():
+        rtext_list.append(RText('Nothing', color=RColor.dark_gray, styles=RStyle.italic))
+    
+    src.reply(RTextMCDRTranslation('hooks.list.script', rtext_list))
 
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
@@ -366,12 +388,12 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
                 # 创建task
                 create_task(task.get('task_type'), command_file_content, task.get('name'),
                             server.get_plugin_command_source(),
-                            server)
+                            server, created_by=script)
             else:
                 # 创建task
                 create_task(task.get('task_type'), task.get('command'), task.get('name'),
                             server.get_plugin_command_source(),
-                            server)
+                            server, created_by=script)
                 
             for hook in task.get('hooks'):
                 # 挂载
@@ -422,11 +444,9 @@ def on_load(server: PluginServerInterface, old_module):
     load_scripts(server)
     
     if utils.is_windows():
-        server.logger.warning('#####################################################################################')
-        server.logger.warning('#####################################################################################')
+        server.logger.warning('!###################################################################################!')
         server.logger.warning('Some features of hooks plugin cannot be run on Windows, you have already been warned.')
-        server.logger.warning('#####################################################################################')
-        server.logger.warning('#####################################################################################')
+        server.logger.warning('!###################################################################################!')
     
     server.register_command(
         Literal('!!hooks')
@@ -479,6 +499,10 @@ def on_load(server: PluginServerInterface, old_module):
             .then(
                 Literal('mount')
                 .runs(lambda src: list_mount(src))
+            )
+            .then(
+                Literal('scripts')
+                .runs(lambda src: list_scripts(src))
             )
         )
         .then(

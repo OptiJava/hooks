@@ -24,8 +24,7 @@ hooks:
 
   list:
     task: |
-      §6任务列表：
-        {0}
+      §6任务列表：{0}
 
     mount: |
       §6挂载列表：
@@ -47,3 +46,7 @@ hooks:
 
         §aon_info: §6{11}
         §aon_user_info: §6{12}
+
+    script: |
+      §6脚本列表：
+        {0}

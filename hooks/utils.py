@@ -6,9 +6,7 @@ from mcdreforged.api.utils.serializer import serialize
 
 
 def is_windows() -> bool:
-    if platform.platform().__contains__('Windows'):
-        return True
-    return False
+    return platform.platform().__contains__('Windows')
 
 
 def is_int_var(obj: Any) -> bool:
