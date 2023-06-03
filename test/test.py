@@ -85,7 +85,7 @@ def test_type_int_detect():
 
 
 def test_is_windows():
-    print(utils.is_windows())
+    print(‘操作系统是否为Windows：’ + utils.is_windows())
 
 
 if __name__ == "__main__":
