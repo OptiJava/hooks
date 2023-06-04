@@ -1,8 +1,10 @@
 import json
 import os
+import threading
 import time
 from enum import Enum
 from io import StringIO
+from time import sleep
 from typing import List, Union
 
 from mcdreforged.api.all import *
@@ -44,7 +46,13 @@ class TaskType(Enum):
     python_code = 'python_code'
 
 
-class Task(Serializable):
+class Task:
+    def __init__(self, name, task_type, created_by, command):
+        self.name = name
+        self.task_type = task_type
+        self.created_by = created_by
+        self.command = command
+    
     name: str = 'undefined'
     
     task_type: TaskType = TaskType.undefined
@@ -113,10 +121,53 @@ class Task(Serializable):
             if obj_dict is not None:
                 exec(self.command, obj_dict, {})
             else:
-                exec(self.command, var_dict, locals())
-            
+                if var_dict is not None:
+                    exec(self.command, var_dict, locals())
+                else:
+                    exec(self.command, globals(), locals())
+        
         server.logger.debug(f'Task finished, name: {self.name}, task_type: {self.task_type}, command: {self.command}, '
                             f'costs {time.time() - start_time} seconds.')
+
+
+def stop_all_schedule_daemon_threads():
+    if len(temp_config.schedule_daemon_threads) == 0:
+        return
+    
+    for thr in temp_config.schedule_daemon_threads:
+        thr.break_thread()
+        temp_config.schedule_daemon_threads.remove(thr)
+
+
+class AThread(threading.Thread):
+    def init_thread(self):
+        super().__init__(daemon=True)
+
+
+class ScheduleTask(Task, AThread):
+    def __init__(self, name, task_type, created_by, command, server_inst, exec_interval):
+        super().__init__(name, task_type, created_by, command)
+        self.server_inst = server_inst
+        self.exec_interval = exec_interval
+        self.stop_event = threading.Event()
+        super().init_thread()
+        temp_config.schedule_daemon_threads.append(self)
+    
+    def break_thread(self):
+        self.stop_event.set()
+    
+    def run(self):
+        if self.exec_interval <= 0:
+            self.server_inst.logger.warning(
+                f'Schedule task {self.name} has illegal exec_interval: {self.exec_interval}')
+            return
+        
+        while True:
+            for _ in range(self.exec_interval):
+                if self.stop_event.is_set():
+                    return
+                sleep(1.0)
+            self.execute_task(self.server_inst, 'schedule')
 
 
 class Configuration(Serializable):
@@ -156,6 +207,8 @@ class TempConfig:
     task: dict[str, Task]
     
     scripts_list: dict[str, str]
+    
+    schedule_daemon_threads: list = list()
 
 
 temp_config: TempConfig
@@ -249,7 +302,7 @@ def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerI
 
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
-                created_by=None):
+                is_schedule=False, exec_interval=0, created_by=None):
     if name in temp_config.task:
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
@@ -266,7 +319,14 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
     if created_by is None:
         created_by = str(src)
     
-    temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+    if not is_schedule:
+        temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+    else:
+        var1 = ScheduleTask(name=name, task_type=tsk_type, command=command, created_by=created_by,
+                            server_inst=server, exec_interval=exec_interval)
+        temp_config.task[name] = var1
+        var1.start()
+        var1.name = f'hooks - schedule_task_daemon({name})'
     
     server.logger.info(f'Successfully created task {name}')
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
@@ -281,6 +341,11 @@ def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
         for tasks_in_hook in temp_config.hooks.get(hook):
             if tasks_in_hook == name:
                 unmount_task(hook, name, src, server)
+    
+    var1 = temp_config.task.get(name)
+    if isinstance(var1, ScheduleTask):
+        var1.break_thread()
+        temp_config.schedule_daemon_threads.remove(var1)
     
     temp_config.task.pop(name)
     
@@ -314,7 +379,7 @@ def list_mount(src: CommandSource):
         list_hooks.append(str(temp_config.hooks.get(str(hk))))
     
     src.reply(RTextMCDRTranslation('hooks.list.mount', *list_hooks))
-    
+
 
 @new_thread('hooks - list')
 def list_scripts(src: CommandSource):
@@ -331,6 +396,8 @@ def list_scripts(src: CommandSource):
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
     global config, temp_config
+    
+    stop_all_schedule_daemon_threads()
     
     temp_config = TempConfig()
     config = server.load_config_simple(target_class=Configuration)
@@ -394,7 +461,7 @@ def parse_and_apply_scripts(script: str, server: PluginServerInterface):
                 create_task(task.get('task_type'), task.get('command'), task.get('name'),
                             server.get_plugin_command_source(),
                             server, created_by=script)
-                
+            
             for hook in task.get('hooks'):
                 # 挂载
                 mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
@@ -460,6 +527,25 @@ def on_load(server: PluginServerInterface, old_module):
                         GreedyText('command')
                         .requires(lambda src: src.has_permission(3))
                         .runs(lambda src, ctx: create_task(ctx['task_type'], ctx['command'], ctx['name'], src, server))
+                    )
+                )
+            )
+        )
+        .then(
+            Literal('schedule')
+            .then(
+                Text('name')
+                .then(
+                    Integer('exec_interval')
+                    .then(
+                        Text('task_type')
+                        .then(
+                            GreedyText('command')
+                            .requires(lambda src: src.has_permission(3))
+                            .runs(lambda src, ctx: create_task(ctx['task_type'], ctx['command'], ctx['name'], src,
+                                                               server, is_schedule=True,
+                                                               exec_interval=ctx['exec_interval']))
+                        )
                     )
                 )
             )
@@ -535,6 +621,9 @@ def on_load(server: PluginServerInterface, old_module):
 
 def on_unload(server: PluginServerInterface):
     global temp_config
+    
+    stop_all_schedule_daemon_threads()
+    
     trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
     server.save_config_simple(config)
