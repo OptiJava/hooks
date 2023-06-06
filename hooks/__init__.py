@@ -469,7 +469,6 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
                     # 挂载
                     mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
                 
-                
         if content.get('schedule_tasks') is not None:
             for schedule in content.get('schedule_tasks'):
                 use_cmd_file: bool = False
