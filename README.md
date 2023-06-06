@@ -86,7 +86,7 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 
 首先要编写脚本，示例：
 ``````
-tasks:  
+tasks:  # 普通任务
   - name: motd  # 声明task的名字，别有空格
     task_type: shell_command  # 任务类型
     command: date   # 要执行的指令
@@ -94,9 +94,30 @@ tasks:
     hooks:   # 要挂载到的hook，必须是数组
       - on_server_started
       - on_mcdr_started
+ schedule_tasks:  # 定时任务声明
+  - name: ababababa  # 名字
+    task_type: server_command  # 任务类型
+    command: say 6  # 指令
+    command_file: {hooks_config_path}/scripts/script.txt（脚本内容路径，如果此路径有效，插件将从command_file中读取command并执行，执行的指令即文件的所有内容（文件扩展名随意写，插件并非直接执行此文件，而是将文件内容读到内存处理后再执行）。command_file和command只用写一个，command_file如果写了command项就会被忽略）。{hooks_config_path}会被替换为hooks插件的配置文件目录，即server.get_data_folder()
+    hooks:
+      - on_user_info  # 定时任务也可以被挂载哟~ 
 ``````
 
 将其命名为`<脚本名字>.yaml`，并且放到`config/hooks/scripts`文件夹或子文件夹中
+
+### 定时任务（`schedule_task`）
+
+定时任务就是隔一段时间执行一次的任务
+
+每一个定时任务都会被放到一个单独的线程调度，线程名`hooks - schedule_task_daemon(<任务名>)`，可以使用`!!MCDR status`查看
+
+#### 指令
+
+`!!hooks schedule <name> <exec_interval> <task_type> <command>`
+- `<name>`任务名字，定时任务本质上和任务一样，只不过多了执行间隔的属性
+- `<exec_interval>`执行间隔，单位秒，必须是整数
+- `<task_type>`任务类型
+- `<command>`指令
 
 ### 其他指令
 

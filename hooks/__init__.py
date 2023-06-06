@@ -48,12 +48,12 @@ class TaskType(Enum):
 
 class Task:
     def __init__(self, name, task_type, created_by, command):
-        self.name = name
+        self.task_name = name
         self.task_type = task_type
         self.created_by = created_by
         self.command = command
     
-    name: str = 'undefined'
+    task_name: str = 'undefined'
     
     task_type: TaskType = TaskType.undefined
     
@@ -63,20 +63,20 @@ class Task:
     
     @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
-        server.logger.debug(f'Executing task: {self.name}, task_type: {self.task_type}, command: {self.command}')
+        server.logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}, command: {self.command}')
         server.logger.debug(f'objects_dict: {str(var_dict)}')
         
         start_time = time.time()
         
         if self.command is None:
             server.logger.error(
-                f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} '
+                f'Task state is not correct! Task: {self.task_name} Hooks: {hook} TaskType: {self.task_type} '
                 f'command: {self.command}')
             return
         
         if self.task_type == TaskType.undefined:
             server.logger.error(
-                f'Task state is not correct! Task: {self.name} Hooks: {hook} TaskType: {self.task_type} '
+                f'Task state is not correct! Task: {self.task_name} Hooks: {hook} TaskType: {self.task_type} '
                 f'command: {self.command}')
             return
         
@@ -126,7 +126,7 @@ class Task:
                 else:
                     exec(self.command, globals(), locals())
         
-        server.logger.debug(f'Task finished, name: {self.name}, task_type: {self.task_type}, command: {self.command}, '
+        server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, command: {self.command}, '
                             f'costs {time.time() - start_time} seconds.')
 
 
@@ -142,6 +142,9 @@ def stop_all_schedule_daemon_threads():
 class AThread(threading.Thread):
     def init_thread(self):
         super().__init__(daemon=True)
+        
+    def set_thread_name(self, name: str):
+        self.name = name
 
 
 class ScheduleTask(Task, AThread):
@@ -151,6 +154,7 @@ class ScheduleTask(Task, AThread):
         self.exec_interval = exec_interval
         self.stop_event = threading.Event()
         super().init_thread()
+        super(Task, self).set_thread_name(f'hooks - schedule_task_daemon({name})')
         temp_config.schedule_daemon_threads.append(self)
     
     def break_thread(self):
@@ -159,7 +163,7 @@ class ScheduleTask(Task, AThread):
     def run(self):
         if self.exec_interval <= 0:
             self.server_inst.logger.warning(
-                f'Schedule task {self.name} has illegal exec_interval: {self.exec_interval}')
+                f'Schedule task {self.task_name} has illegal exec_interval: {self.exec_interval}')
             return
         
         while True:
@@ -326,7 +330,6 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
                             server_inst=server, exec_interval=exec_interval)
         temp_config.task[name] = var1
         var1.start()
-        var1.name = f'hooks - schedule_task_daemon({name})'
     
     server.logger.info(f'Successfully created task {name}')
     src.reply(RTextMCDRTranslation('hooks.create.success', name))
@@ -365,7 +368,7 @@ def list_task(src: CommandSource):
     for t in temp_config.task.values():
         rtext_list.append(RTextList(
             RText('\n  '),
-            RText(t.name, color=RColor.red).h(t.task_type.name),
+            RText(t.task_name, color=RColor.red).h(t.task_type.name),
             RText(f'  created by: "{t.created_by}"', color=RColor.green)
         ))
     src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
