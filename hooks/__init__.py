@@ -437,81 +437,83 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
         with open(temp_config.scripts_list.get(script), 'r') as f:
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
-        if content.get('tasks') is not None:
-            for task in content.get('tasks'):
-                use_cmd_file: bool = False
-                cmd_file_path: str = ''
-                
-                if task.get('command_file') is not None:
-                    var1 = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+        if content is not None:
+            if content.get('tasks') is not None:
+                for task in content.get('tasks'):
+                    use_cmd_file: bool = False
+                    cmd_file_path: str = ''
                     
-                    if os.path.isfile(var1):
-                        cmd_file_path = var1
-                        use_cmd_file = True
-                    else:
-                        server.logger.warning(
-                            f'Script path for task {task.get("name")} is invalid, use command instead! '
-                            f'{task.get("command_file")}')
-                
-                if use_cmd_file:
-                    with open(cmd_file_path, 'r') as command_file:
-                        command_file_content = command_file.read()
-                    # 创建task
-                    create_task(task.get('task_type'), command_file_content, task.get('name'),
-                                server.get_plugin_command_source(),
-                                server, created_by=script)
-                else:
-                    # 创建task
-                    create_task(task.get('task_type'), task.get('command'), task.get('name'),
-                                server.get_plugin_command_source(),
-                                server, created_by=script)
-                
-                if task.get('hooks') is None:
-                    continue
-                for hook in task.get('hooks'):
-                    # 挂载
-                    mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
-                
-        if content.get('schedule_tasks') is not None:
-            for schedule in content.get('schedule_tasks'):
-                use_cmd_file: bool = False
-                cmd_file_path: str = ''
-                
-                if int(schedule.get('exec_interval')) <= 0:
-                    server.logger.warning(f'Invalid exec_interval in schedule task {schedule.get("name")}!')
-                
-                if schedule.get('command_file') is not None:
-                    var1 = str(schedule.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+                    if task.get('command_file') is not None:
+                        var1 = str(task.get('command_file')).replace('{hooks_config_path}', server.get_data_folder())
+                        
+                        if os.path.isfile(var1):
+                            cmd_file_path = var1
+                            use_cmd_file = True
+                        else:
+                            server.logger.warning(
+                                f'Script path for task {task.get("name")} is invalid, use command instead! '
+                                f'{task.get("command_file")}')
                     
-                    if os.path.isfile(var1):
-                        cmd_file_path = var1
-                        use_cmd_file = True
+                    if use_cmd_file:
+                        # 读取
+                        with open(cmd_file_path, 'r') as command_file:
+                            command_file_content = command_file.read()
+                        # 创建task
+                        create_task(task.get('task_type'), command_file_content, task.get('name'),
+                                    server.get_plugin_command_source(),
+                                    server, created_by=script)
                     else:
-                        server.logger.warning(
-                            f'Script path for task {schedule.get("name")} is invalid, use command instead! '
-                            f'{schedule.get("command_file")}')
-                
-                if use_cmd_file:
-                    with open(cmd_file_path, 'r') as command_file:
-                        command_file_content = command_file.read()
-                    # 创建task
-                    create_task(schedule.get('task_type'), command_file_content, schedule.get('name'),
-                                server.get_plugin_command_source(),
-                                server, created_by=script, is_schedule=True,
-                                exec_interval=schedule.get('exec_interval'))
-                else:
-                    # 创建task
-                    create_task(schedule.get('task_type'), schedule.get('command'), schedule.get('name'),
-                                server.get_plugin_command_source(),
-                                server, created_by=script, is_schedule=True,
-                                exec_interval=schedule.get('exec_interval'))
-                
-                if schedule.get('hooks') is None:
-                    continue
-                for hook in schedule.get('hooks'):
-                    # 挂载
-                    mount_task(hook, schedule.get('name'), server.get_plugin_command_source(), server)
-    
+                        # 创建task
+                        create_task(task.get('task_type'), task.get('command'), task.get('name'),
+                                    server.get_plugin_command_source(),
+                                    server, created_by=script)
+                    
+                    if task.get('hooks') is None:
+                        continue
+                    for hook in task.get('hooks'):
+                        # 挂载
+                        mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
+            
+            if content.get('schedule_tasks') is not None:
+                for schedule in content.get('schedule_tasks'):
+                    use_cmd_file: bool = False
+                    cmd_file_path: str = ''
+                    
+                    if int(schedule.get('exec_interval')) <= 0:
+                        server.logger.warning(f'Invalid exec_interval in schedule task {schedule.get("name")}!')
+                    
+                    if schedule.get('command_file') is not None:
+                        var1 = str(schedule.get('command_file')).replace('{hooks_config_path}',
+                                                                         server.get_data_folder())
+                        
+                        if os.path.isfile(var1):
+                            cmd_file_path = var1
+                            use_cmd_file = True
+                        else:
+                            server.logger.warning(
+                                f'Script path for task {schedule.get("name")} is invalid, use command instead! '
+                                f'{schedule.get("command_file")}')
+                    
+                    if use_cmd_file:
+                        with open(cmd_file_path, 'r') as command_file:
+                            command_file_content = command_file.read()
+                        # 创建task
+                        create_task(schedule.get('task_type'), command_file_content, schedule.get('name'),
+                                    server.get_plugin_command_source(),
+                                    server, created_by=script, is_schedule=True,
+                                    exec_interval=schedule.get('exec_interval'))
+                    else:
+                        # 创建task
+                        create_task(schedule.get('task_type'), schedule.get('command'), schedule.get('name'),
+                                    server.get_plugin_command_source(),
+                                    server, created_by=script, is_schedule=True,
+                                    exec_interval=schedule.get('exec_interval'))
+                    
+                    if schedule.get('hooks') is None:
+                        continue
+                    for hook in schedule.get('hooks'):
+                        # 挂载
+                        mount_task(hook, schedule.get('name'), server.get_plugin_command_source(), server)
     except Exception as e:
         server.logger.exception(f'Unexpected exception when parse or apply scripts {os.path.basename(script)}! Please '
                                 f'check your scripts.', e)
@@ -539,8 +541,9 @@ def load_scripts(server: PluginServerInterface):
         
         return _files_in_a_folder
     
-    # 遍历所有文件
+    # 遍历所有yaml文件
     for script_path in list_all_files(scripts_folder):
+        # key：文件名    value：文件路径
         temp_config.scripts_list[os.path.basename(script_path)] = script_path
     
     # 遍历所有已成功注册的脚本
