@@ -8,6 +8,7 @@ from time import sleep
 from typing import List, Union
 
 from mcdreforged.api.all import *
+
 from ruamel import yaml
 
 from hooks.utils import *
@@ -61,7 +62,6 @@ class Task:
     
     command: str = ''
     
-    @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
         server.logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}, command: {self.command}')
         server.logger.debug(f'objects_dict: {str(var_dict)}')
@@ -119,15 +119,15 @@ class Task:
         # python code
         elif self.task_type == TaskType.python_code:
             if obj_dict is not None:
-                exec(self.command, obj_dict, {})
+                exec(self.command, {}, obj_dict)
             else:
                 if var_dict is not None:
-                    exec(self.command, var_dict, locals())
+                    exec(self.command, {}, var_dict)
                 else:
-                    exec(self.command, globals(), locals())
+                    exec(self.command, {}, locals())
         
-        server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, command: {self.command}, '
-                            f'costs {time.time() - start_time} seconds.')
+        server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
+                            f'command: {self.command}, costs {time.time() - start_time} seconds.')
 
 
 def stop_all_schedule_daemon_threads():
@@ -142,7 +142,7 @@ def stop_all_schedule_daemon_threads():
 class AThread(threading.Thread):
     def init_thread(self):
         super().__init__(daemon=True)
-        
+    
     def set_thread_name(self, name: str):
         self.name = name
 
