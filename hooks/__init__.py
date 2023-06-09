@@ -62,6 +62,7 @@ class Task:
     
     command: str = ''
     
+    @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
         server.logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}, command: {self.command}')
         server.logger.debug(f'objects_dict: {str(var_dict)}')
