@@ -678,7 +678,6 @@ def on_unload(server: PluginServerInterface):
     trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
     server.save_config_simple(config)
-    temp_config = TempConfig()
 
 
 def on_info(server: PluginServerInterface, info: Info):
