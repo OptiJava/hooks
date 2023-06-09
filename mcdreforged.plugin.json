@@ -1,6 +1,6 @@
 {
 	"id": "hooks",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"name": "hooks",
 	"description": {
 		"en_us": "Allow MCDR to trigger custom scripts under specific conditions.",
@@ -9,7 +9,7 @@
 	"author": "OptiJava",
 	"link": "https://github.com/OptiJava/hooks",
 	"dependencies": {
-		"mcdreforged": ">=2.8.1"
+		"mcdreforged": ">=2.9.0"
 	},
 
 	"archive_name": "hooks-v{version}",
