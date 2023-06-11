@@ -26,7 +26,7 @@ def is_dict_var(obj: Any) -> bool:
     else:
         try:
             return isinstance(eval(str(obj)), dict)
-        except:
+        except SyntaxError:
             return False
 
 
@@ -36,7 +36,7 @@ def is_list_var(obj: Any) -> bool:
     else:
         try:
             return isinstance(eval(str(obj)), list)
-        except:
+        except SyntaxError:
             return False
 
 
