@@ -1,241 +1,44 @@
 import json
 import os
-import threading
-import time
-from enum import Enum
-from io import StringIO
-from time import sleep
-from typing import List, Union
-
-from mcdreforged.api.all import *
+from typing import Union, Any
 
 from ruamel import yaml
 
-from hooks.utils import *
+from mcdreforged.api.all import *
+
+import hooks.config as cfg
+import hooks.schedule_task as schedule_task
+import hooks.tasks as tasks
+import hooks.utils as utils
+from hooks.utils import process_arg_server
 
 scripts_folder: str = ''
 
 
-class Hooks(Enum):
-    undefined = 'undefined'
-    
-    on_plugin_loaded = 'on_plugin_loaded'
-    on_plugin_unloaded = 'on_plugin_unloaded'
-    
-    on_server_starting = 'on_server_starting'
-    on_server_started = 'on_server_started'
-    on_server_stopped = 'on_server_stopped'
-    on_server_crashed = 'on_server_crashed'
-    
-    on_mcdr_started = 'on_mcdr_started'
-    on_mcdr_stopped = 'on_mcdr_stopped'
-    
-    on_player_joined = 'on_player_joined'
-    on_player_left = 'on_player_left'
-    
-    on_info = 'on_info'
-    on_user_info = 'on_user_info'
-
-
-class TaskType(Enum):
-    undefined = 'undefined'
-    
-    shell_command = 'shell_command'
-    server_command = 'server_command'
-    mcdr_command = 'mcdr_command'
-    
-    python_code = 'python_code'
-
-
-class Task:
-    def __init__(self, name, task_type, created_by, command):
-        self.task_name = name
-        self.task_type = task_type
-        self.created_by = created_by
-        self.command = command
-    
-    task_name: str = 'undefined'
-    
-    task_type: TaskType = TaskType.undefined
-    
-    created_by: str = 'undefined'
-    
-    command: str = ''
-    
-    @new_thread('hooks - execute')
-    def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
-        server.logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}, command: {self.command}')
-        server.logger.debug(f'objects_dict: {str(var_dict)}')
-        
-        start_time = time.time()
-        
-        if self.command is None:
-            server.logger.error(
-                f'Task state is not correct! Task: {self.task_name} Hooks: {hook} TaskType: {self.task_type} '
-                f'command: {self.command}')
-            return
-        
-        if self.task_type == TaskType.undefined:
-            server.logger.error(
-                f'Task state is not correct! Task: {self.task_name} Hooks: {hook} TaskType: {self.task_type} '
-                f'command: {self.command}')
-            return
-        
-        # shell
-        if self.task_type == TaskType.shell_command:
-            # 生成参数
-            command = StringIO()
-            
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command.write('export "')
-                    command.write(str(key))
-                    command.write('"')
-                    command.write('=')
-                    command.write('"')
-                    command.write(str(var_dict.get(key)))
-                    command.write('" && ')
-            command.write(self.command)
-            
-            os.system(command.getvalue())
-        # mc command
-        elif self.task_type == TaskType.server_command:
-            # 替换参数
-            command = self.command
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
-            
-            server.execute(command)
-        # mcdr command
-        elif self.task_type == TaskType.mcdr_command:
-            # 替换参数
-            command = self.command
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
-            
-            server.execute_command(command)
-        
-        # python code
-        elif self.task_type == TaskType.python_code:
-            if obj_dict is not None:
-                exec(self.command, {}, obj_dict)
-            else:
-                if var_dict is not None:
-                    exec(self.command, {}, var_dict)
-                else:
-                    exec(self.command, {}, locals())
-        
-        server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
-                            f'command: {self.command}, costs {time.time() - start_time} seconds.')
-
-
 def stop_all_schedule_daemon_threads():
-    if len(temp_config.schedule_daemon_threads) == 0:
+    if len(cfg.temp_config.schedule_daemon_threads) == 0:
         return
     
-    for thr in temp_config.schedule_daemon_threads:
+    for thr in cfg.temp_config.schedule_daemon_threads:
         thr.break_thread()
-        temp_config.schedule_daemon_threads.remove(thr)
+        cfg.temp_config.schedule_daemon_threads.remove(thr)
 
 
-class AThread(threading.Thread):
-    def init_thread(self):
-        super().__init__(daemon=True)
-    
-    def set_thread_name(self, name: str):
-        self.name = name
-
-
-class ScheduleTask(Task, AThread):
-    def __init__(self, name, task_type, created_by, command, server_inst, exec_interval):
-        super().__init__(name, task_type, created_by, command)
-        self.server_inst = server_inst
-        self.exec_interval = exec_interval
-        self.stop_event = threading.Event()
-        super().init_thread()
-        super(Task, self).set_thread_name(f'hooks - schedule_task_daemon({name})')
-        temp_config.schedule_daemon_threads.append(self)
-    
-    def break_thread(self):
-        self.stop_event.set()
-    
-    def run(self):
-        if self.exec_interval <= 0:
-            self.server_inst.logger.warning(
-                f'Schedule task {self.task_name} has illegal exec_interval: {self.exec_interval}')
-            return
-        
-        while True:
-            for _ in range(self.exec_interval):
-                if self.stop_event.is_set():
-                    return
-                sleep(1.0)
-            self.execute_task(self.server_inst, 'schedule')
-
-
-class Configuration(Serializable):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-    
-    automatically: bool = True
-
-
-class TempConfig:
-    
-    def __init__(self):
-        self.hooks = {
-            'undefined': [],
-            
-            'on_plugin_loaded': [],
-            'on_plugin_unloaded': [],
-            
-            'on_server_starting': [],
-            'on_server_started': [],
-            'on_server_stopped': [],
-            'on_server_crashed': [],
-            'on_mcdr_started': [],
-            'on_mcdr_stopped': [],
-            
-            'on_player_joined': [],
-            'on_player_left': [],
-            
-            'on_info': [],
-            'on_user_info': []
-        }
-        self.task = {}
-        self.scripts_list = {}
-    
-    hooks: dict[str, List[str]]
-    
-    task: dict[str, Task]
-    
-    scripts_list: dict[str, str]
-    
-    schedule_daemon_threads: list = list()
-
-
-temp_config: TempConfig
-
-config: Configuration
-
-
-def trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
-    if not config.automatically:
+def trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+    if not cfg.config.automatically:
         return
     
     try:
         server.logger.debug(f'Triggered hooks {hook.value}')
         server.logger.debug(f'objects_dict: {str(objects_dict)}')
-        if len(temp_config.hooks.get(hook.value)) != 0:
+        if len(cfg.temp_config.hooks.get(hook.value)) != 0:
             _trigger_hooks(hook, server, objects_dict)
     except Exception as e:
         server.logger.exception(f'Unexpected exception when triggering hook {hook.value}', e)
 
 
 @new_thread('hooks - trigger')
-def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+def _trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     # 初始化最终变量字典
     finally_var_dict = dict()
     
@@ -259,23 +62,24 @@ def _trigger_hooks(hook: Hooks, server: PluginServerInterface, objects_dict: dic
                 finally_var_dict[an_object_key + '_' + var_inner_attr_key] = var_inner_attr_value
     
     # 遍历被挂载到此hook的task的key
-    for task in temp_config.hooks.get(hook.value):
-        if temp_config.task.get(task) is None:
+    for task in cfg.temp_config.hooks.get(hook.value):
+        if cfg.temp_config.task.get(task) is None:
             server.logger.warning(f'Task {task} is not exist, unmount it from hook {hook.value}!')
-            temp_config.hooks.get(hook.value).remove(task)
+            cfg.temp_config.hooks.get(hook.value).remove(task)
             return
         # 执行任务
         try:
-            temp_config.task.get(task).execute_task(server, hook.value, finally_var_dict, obj_dict=objects_dict)
+            cfg.temp_config.task.get(task).execute_task(server, hook.value, finally_var_dict, obj_dict=objects_dict)
         except Exception as e:
             server.logger.exception(
                 f'Unexpected exception when executing task {task}, hook {hook.value}, '
-                f'task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
+                f'task_type {cfg.temp_config.task.get(task).task_type}, '
+                f'command {cfg.temp_config.task.get(task).command}',
                 e)
 
 
 def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
-    h = temp_config.hooks.get(hook)
+    h = cfg.temp_config.hooks.get(hook)
     
     if h is None:
         src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
@@ -291,7 +95,7 @@ def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInt
 
 
 def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
-    h = temp_config.hooks.get(hook)
+    h = cfg.temp_config.hooks.get(hook)
     
     if h is None:
         src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
@@ -308,7 +112,7 @@ def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerI
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
                 is_schedule=False, exec_interval=0, created_by=None):
-    if name in temp_config.task:
+    if name in cfg.temp_config.task:
         src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
         return
     
@@ -316,7 +120,7 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         return
     
     try:
-        tsk_type = TaskType(task_type)
+        tsk_type = tasks.TaskType(task_type)
     except ValueError:
         src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
         return
@@ -325,11 +129,11 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         created_by = str(src)
     
     if not is_schedule:
-        temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+        cfg.temp_config.task[name] = tasks.Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
     else:
-        var1 = ScheduleTask(name=name, task_type=tsk_type, command=command, created_by=created_by,
-                            server_inst=server, exec_interval=exec_interval)
-        temp_config.task[name] = var1
+        var1 = schedule_task.ScheduleTask(name=name, task_type=tsk_type, command=command, created_by=created_by,
+                                          server_inst=server, exec_interval=exec_interval)
+        cfg.temp_config.task[name] = var1
         var1.start()
     
     server.logger.info(f'Successfully created task {name}')
@@ -337,21 +141,21 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
 
 
 def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
-    if name not in temp_config.task.keys():
+    if name not in cfg.temp_config.task.keys():
         src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
         return
     
-    for hook in temp_config.hooks.keys():
-        for tasks_in_hook in temp_config.hooks.get(hook):
+    for hook in cfg.temp_config.hooks.keys():
+        for tasks_in_hook in cfg.temp_config.hooks.get(hook):
             if tasks_in_hook == name:
                 unmount_task(hook, name, src, server)
     
-    var1 = temp_config.task.get(name)
-    if isinstance(var1, ScheduleTask):
+    var1 = cfg.temp_config.task.get(name)
+    if isinstance(var1, schedule_task.ScheduleTask):
         var1.break_thread()
-        temp_config.schedule_daemon_threads.remove(var1)
+        cfg.temp_config.schedule_daemon_threads.remove(var1)
     
-    temp_config.task.pop(name)
+    cfg.temp_config.task.pop(name)
     
     server.logger.info(f'Successfully deleted task {name}')
     src.reply(RTextMCDRTranslation('hooks.delete.success', name))
@@ -361,12 +165,12 @@ def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
 def list_task(src: CommandSource):
     rtext_list = RTextList()
     
-    if len(temp_config.task.values()) == 0:
+    if len(cfg.temp_config.task.values()) == 0:
         rtext_list.append(RText('Nothing', color=RColor.dark_gray, styles=RStyle.italic))
         src.reply(RTextMCDRTranslation('hooks.list.task', rtext_list))
         return
     
-    for t in temp_config.task.values():
+    for t in cfg.temp_config.task.values():
         rtext_list.append(RTextList(
             RText('\n  '),
             RText(t.task_name, color=RColor.red).h(t.task_type.name),
@@ -379,8 +183,8 @@ def list_task(src: CommandSource):
 def list_mount(src: CommandSource):
     list_hooks: list = list()
     
-    for hk in dict(Hooks.__members__).keys():
-        list_hooks.append(str(temp_config.hooks.get(str(hk))))
+    for hk in dict(tasks.Hooks.__members__).keys():
+        list_hooks.append(str(cfg.temp_config.hooks.get(str(hk))))
     
     src.reply(RTextMCDRTranslation('hooks.list.mount', *list_hooks))
 
@@ -389,8 +193,8 @@ def list_mount(src: CommandSource):
 def list_scripts(src: CommandSource):
     rtext_list = RTextList()
     
-    for scr in temp_config.scripts_list.keys():
-        rtext_list.append(RText(scr + '  ', color=RColor.red).h(temp_config.scripts_list.get(scr)))
+    for scr in cfg.temp_config.scripts_list.keys():
+        rtext_list.append(RText(scr + '  ', color=RColor.red).h(cfg.temp_config.scripts_list.get(scr)))
     
     if rtext_list.is_empty():
         rtext_list.append(RText('Nothing', color=RColor.dark_gray, styles=RStyle.italic))
@@ -399,12 +203,10 @@ def list_scripts(src: CommandSource):
 
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
-    global config, temp_config
-    
     stop_all_schedule_daemon_threads()
     
-    temp_config = TempConfig()
-    config = server.load_config_simple(target_class=Configuration)
+    cfg.temp_config = cfg.TempConfig()
+    cfg.config = server.load_config_simple(target_class=cfg.Configuration)
     
     load_scripts(server)
     server.logger.info('Config reloaded.')
@@ -412,7 +214,7 @@ def reload_config(src: CommandSource, server: PluginServerInterface):
 
 
 def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServerInterface):
-    if task not in temp_config.task.keys():
+    if task not in cfg.temp_config.task.keys():
         src.reply(RTextMCDRTranslation('hooks.man_run.task_not_exist'))
         return
     
@@ -423,19 +225,20 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
     
     try:
-        temp_config.task.get(task).execute_task(server, Hooks.undefined.value, var_dict=env_dict, obj_dict=env_dict)
+        cfg.temp_config.task.get(task).execute_task(server, tasks.Hooks.undefined.value, var_dict=env_dict,
+                                                    obj_dict=env_dict)
         src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
     except Exception as e:
         server.logger.exception(
-            f'Unexpected exception when executing task {task}, hook {Hooks.undefined.value}, '
-            f'task_type {temp_config.task.get(task).task_type}, command {temp_config.task.get(task).command}',
+            f'Unexpected exception when executing task {task}, hook {tasks.Hooks.undefined.value}, '
+            f'task_type {cfg.temp_config.task.get(task).task_type}, command {cfg.temp_config.task.get(task).command}',
             e)
 
 
 def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
     try:
         # 读取
-        with open(temp_config.scripts_list.get(script), 'r') as f:
+        with open(cfg.temp_config.scripts_list.get(script), 'r') as f:
             content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
         
         if content is not None:
@@ -545,18 +348,18 @@ def load_scripts(server: PluginServerInterface):
     # 遍历所有yaml文件
     for script_path in list_all_files(scripts_folder):
         # key：文件名    value：文件路径
-        temp_config.scripts_list[os.path.basename(script_path)] = script_path
+        cfg.temp_config.scripts_list[os.path.basename(script_path)] = script_path
     
     # 遍历所有已成功注册的脚本
-    for script in temp_config.scripts_list.keys():
+    for script in cfg.temp_config.scripts_list.keys():
         _parse_and_apply_scripts(script, server)
 
 
 def on_load(server: PluginServerInterface, old_module):
-    global config, scripts_folder, temp_config
+    global scripts_folder
     
-    temp_config = TempConfig()
-    config = server.load_config_simple(target_class=Configuration)
+    cfg.temp_config = cfg.TempConfig()
+    cfg.config = server.load_config_simple(target_class=cfg.Configuration)
     
     scripts_folder = os.path.join(server.get_data_folder(), 'scripts')
     load_scripts(server)
@@ -667,56 +470,55 @@ def on_load(server: PluginServerInterface, old_module):
         )
     )
     
-    trigger_hooks(Hooks.on_plugin_loaded, server, {'server': process_arg_server(server), 'old_module': old_module})
+    trigger_hooks(tasks.Hooks.on_plugin_loaded, server,
+                  {'server': process_arg_server(server), 'old_module': old_module})
 
 
 def on_unload(server: PluginServerInterface):
-    global temp_config
-    
     stop_all_schedule_daemon_threads()
     
-    trigger_hooks(Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
+    trigger_hooks(tasks.Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
-    server.save_config_simple(config)
+    server.save_config_simple(cfg.config)
 
 
 def on_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(Hooks.on_info, server, {'server': process_arg_server(server), 'info': info})
+    trigger_hooks(tasks.Hooks.on_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_user_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(Hooks.on_user_info, server, {'server': process_arg_server(server), 'info': info})
+    trigger_hooks(tasks.Hooks.on_user_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_player_joined(server: PluginServerInterface, player: str, info: Info):
-    trigger_hooks(Hooks.on_player_joined, server,
+    trigger_hooks(tasks.Hooks.on_player_joined, server,
                   {'server': process_arg_server(server), 'info': info, 'player': player})
 
 
 def on_player_left(server: PluginServerInterface, player: str):
-    trigger_hooks(Hooks.on_player_left, server, {'server': process_arg_server(server), 'player': player})
+    trigger_hooks(tasks.Hooks.on_player_left, server, {'server': process_arg_server(server), 'player': player})
 
 
 def on_server_start(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_server_starting, server, {'server': process_arg_server(server)})
+    trigger_hooks(tasks.Hooks.on_server_starting, server, {'server': process_arg_server(server)})
 
 
 def on_server_startup(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_server_started, server, {'server': process_arg_server(server)})
+    trigger_hooks(tasks.Hooks.on_server_started, server, {'server': process_arg_server(server)})
 
 
 def on_server_stop(server: PluginServerInterface, return_code: int):
     if return_code != 0:
-        trigger_hooks(Hooks.on_server_crashed, server,
+        trigger_hooks(tasks.Hooks.on_server_crashed, server,
                       {'server': process_arg_server(server), 'return_code': return_code})
     else:
-        trigger_hooks(Hooks.on_server_stopped, server,
+        trigger_hooks(tasks.Hooks.on_server_stopped, server,
                       {'server': process_arg_server(server), 'return_code': return_code})
 
 
 def on_mcdr_start(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
+    trigger_hooks(tasks.Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 
 
 def on_mcdr_stop(server: PluginServerInterface):
-    trigger_hooks(Hooks.on_mcdr_stopped, server, {'server': process_arg_server(server)})
+    trigger_hooks(tasks.Hooks.on_mcdr_stopped, server, {'server': process_arg_server(server)})
