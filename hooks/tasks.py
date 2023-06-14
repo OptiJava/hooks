@@ -5,6 +5,8 @@ from io import StringIO
 
 from mcdreforged.api.all import *
 
+from hooks import config as cfg, mount as mount, schedule_tasks as schedule_tasks
+
 
 class TaskType(Enum):
     undefined = 'undefined'
@@ -14,27 +16,6 @@ class TaskType(Enum):
     mcdr_command = 'mcdr_command'
     
     python_code = 'python_code'
-
-
-class Hooks(Enum):
-    undefined = 'undefined'
-    
-    on_plugin_loaded = 'on_plugin_loaded'
-    on_plugin_unloaded = 'on_plugin_unloaded'
-    
-    on_server_starting = 'on_server_starting'
-    on_server_started = 'on_server_started'
-    on_server_stopped = 'on_server_stopped'
-    on_server_crashed = 'on_server_crashed'
-    
-    on_mcdr_started = 'on_mcdr_started'
-    on_mcdr_stopped = 'on_mcdr_stopped'
-    
-    on_player_joined = 'on_player_joined'
-    on_player_left = 'on_player_left'
-    
-    on_info = 'on_info'
-    on_user_info = 'on_user_info'
 
 
 class Task:
@@ -119,3 +100,57 @@ class Task:
         
         server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
                             f'command: {self.command}, costs {time.time() - start_time} seconds.')
+
+
+def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
+                is_schedule=False, exec_interval=0, created_by=None):
+    if name in cfg.temp_config.task:
+        src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
+        return
+    
+    if name is None or len(name) == 0:
+        return
+    
+    try:
+        tsk_type = TaskType(task_type)
+    except ValueError:
+        src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
+        return
+    
+    if created_by is None:
+        created_by = str(src)
+    
+    if not is_schedule:
+        cfg.temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+    else:
+        if exec_interval <= 0:
+            src.reply(RTextMCDRTranslation('hooks.create.exec_interval_invalid', exec_interval))
+            return
+        var1 = schedule_tasks.ScheduleTask(name=name, task_type=tsk_type, command=command, created_by=created_by,
+                                           server_inst=server, exec_interval=exec_interval)
+        cfg.temp_config.task[name] = var1
+        var1.start()
+    
+    server.logger.info(f'Successfully created task {name}')
+    src.reply(RTextMCDRTranslation('hooks.create.success', name))
+
+
+def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
+    if name not in cfg.temp_config.task.keys():
+        src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
+        return
+    
+    for hook in cfg.temp_config.hooks.keys():
+        for tasks_in_hook in cfg.temp_config.hooks.get(hook):
+            if tasks_in_hook == name:
+                mount.unmount_task(hook, name, src, server)
+    
+    var1 = cfg.temp_config.task.get(name)
+    if isinstance(var1, schedule_tasks.ScheduleTask):
+        var1.break_thread()
+        cfg.temp_config.schedule_daemon_threads.remove(var1)
+    
+    cfg.temp_config.task.pop(name)
+    
+    server.logger.info(f'Successfully deleted task {name}')
+    src.reply(RTextMCDRTranslation('hooks.delete.success', name))

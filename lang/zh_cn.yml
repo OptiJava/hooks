@@ -3,6 +3,7 @@ hooks:
     success: '§a成功创建任务 §6{0}'
     already_exist: '§4任务已存在！'
     task_type_wrong: '§4任务类型 §6{0} §4不正确'
+    exec_interval_invalid: '§4exec_interval不合法：§6{0}'
 
   mount:
     success: '§a成功将任务 §6{0} §a挂载到 §6{1}'

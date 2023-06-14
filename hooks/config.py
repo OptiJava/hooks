@@ -1,8 +1,6 @@
-from typing import List
+from typing import List, Any
 
 from mcdreforged.api.all import Serializable
-
-import hooks.tasks as tasks
 
 
 class Configuration(Serializable):
@@ -39,7 +37,7 @@ class TempConfig:
     
     hooks: dict[str, List[str]]
     
-    task: dict[str, tasks.Task]
+    task: dict[str, Any]
     
     scripts_list: dict[str, str]
     

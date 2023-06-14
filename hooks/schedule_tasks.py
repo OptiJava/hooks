@@ -2,7 +2,7 @@ import threading
 from time import sleep
 
 import hooks.tasks as tasks
-import hooks.config as cfg
+from hooks import config as cfg
 
 
 class AThread(threading.Thread):
@@ -38,3 +38,12 @@ class ScheduleTask(tasks.Task, AThread):
                     return
                 sleep(1.0)
             self.execute_task(self.server_inst, 'schedule')
+
+
+def stop_all_schedule_daemon_threads():
+    if len(cfg.temp_config.schedule_daemon_threads) == 0:
+        return
+    
+    for thr in cfg.temp_config.schedule_daemon_threads:
+        thr.break_thread()
+        cfg.temp_config.schedule_daemon_threads.remove(thr)

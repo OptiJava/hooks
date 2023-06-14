@@ -3,6 +3,7 @@ hooks:
     success: '§aSuccessfully created task §6{0}'
     already_exist: '§4The task is already exist!'
     task_type_wrong: '§4Illegal task_type §6{0}'
+    exec_interval_invalid: '§4Illegal exec_interval §6{0}'
 
   mount:
     success: '§aSuccessfully mount §6{0} §ato §6{1}'

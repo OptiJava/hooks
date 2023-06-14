@@ -7,7 +7,8 @@ from ruamel import yaml
 from mcdreforged.api.all import *
 
 import hooks.config as cfg
-import hooks.schedule_task as schedule_task
+import hooks.mount as mount
+import hooks.schedule_tasks as schedule_tasks
 import hooks.tasks as tasks
 import hooks.utils as utils
 from hooks.utils import process_arg_server
@@ -15,16 +16,7 @@ from hooks.utils import process_arg_server
 scripts_folder: str = ''
 
 
-def stop_all_schedule_daemon_threads():
-    if len(cfg.temp_config.schedule_daemon_threads) == 0:
-        return
-    
-    for thr in cfg.temp_config.schedule_daemon_threads:
-        thr.break_thread()
-        cfg.temp_config.schedule_daemon_threads.remove(thr)
-
-
-def trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     if not cfg.config.automatically:
         return
     
@@ -38,7 +30,7 @@ def trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dict
 
 
 @new_thread('hooks - trigger')
-def _trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+def _trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
     # 初始化最终变量字典
     finally_var_dict = dict()
     
@@ -78,89 +70,6 @@ def _trigger_hooks(hook: tasks.Hooks, server: PluginServerInterface, objects_dic
                 e)
 
 
-def mount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
-    h = cfg.temp_config.hooks.get(hook)
-    
-    if h is None:
-        src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
-        return
-    
-    if task in h:
-        src.reply(RTextMCDRTranslation('hooks.mount.task_already_exist', task, hook))
-        return
-    
-    h.append(task)
-    server.logger.info(f'Successfully mounted task {task}')
-    src.reply(RTextMCDRTranslation('hooks.mount.success', task, hook))
-
-
-def unmount_task(hook: str, task: str, src: CommandSource, server: PluginServerInterface):
-    h = cfg.temp_config.hooks.get(hook)
-    
-    if h is None:
-        src.reply(RTextMCDRTranslation('hooks.mount.hook_not_exist', hook))
-        return
-    
-    if task not in h:
-        src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', task))
-        return
-    
-    h.remove(task)
-    server.logger.info(f'Successfully unmounted task {task}')
-    src.reply(RTextMCDRTranslation('hooks.mount.unmount', hook, task))
-
-
-def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
-                is_schedule=False, exec_interval=0, created_by=None):
-    if name in cfg.temp_config.task:
-        src.reply(RTextMCDRTranslation('hooks.create.already_exist'))
-        return
-    
-    if name is None or len(name) == 0:
-        return
-    
-    try:
-        tsk_type = tasks.TaskType(task_type)
-    except ValueError:
-        src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
-        return
-    
-    if created_by is None:
-        created_by = str(src)
-    
-    if not is_schedule:
-        cfg.temp_config.task[name] = tasks.Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
-    else:
-        var1 = schedule_task.ScheduleTask(name=name, task_type=tsk_type, command=command, created_by=created_by,
-                                          server_inst=server, exec_interval=exec_interval)
-        cfg.temp_config.task[name] = var1
-        var1.start()
-    
-    server.logger.info(f'Successfully created task {name}')
-    src.reply(RTextMCDRTranslation('hooks.create.success', name))
-
-
-def delete_task(name: str, src: CommandSource, server: PluginServerInterface):
-    if name not in cfg.temp_config.task.keys():
-        src.reply(RTextMCDRTranslation('hooks.mount.task_not_exist', name))
-        return
-    
-    for hook in cfg.temp_config.hooks.keys():
-        for tasks_in_hook in cfg.temp_config.hooks.get(hook):
-            if tasks_in_hook == name:
-                unmount_task(hook, name, src, server)
-    
-    var1 = cfg.temp_config.task.get(name)
-    if isinstance(var1, schedule_task.ScheduleTask):
-        var1.break_thread()
-        cfg.temp_config.schedule_daemon_threads.remove(var1)
-    
-    cfg.temp_config.task.pop(name)
-    
-    server.logger.info(f'Successfully deleted task {name}')
-    src.reply(RTextMCDRTranslation('hooks.delete.success', name))
-
-
 @new_thread('hooks - list')
 def list_task(src: CommandSource):
     rtext_list = RTextList()
@@ -183,7 +92,7 @@ def list_task(src: CommandSource):
 def list_mount(src: CommandSource):
     list_hooks: list = list()
     
-    for hk in dict(tasks.Hooks.__members__).keys():
+    for hk in dict(mount.Hooks.__members__).keys():
         list_hooks.append(str(cfg.temp_config.hooks.get(str(hk))))
     
     src.reply(RTextMCDRTranslation('hooks.list.mount', *list_hooks))
@@ -203,7 +112,7 @@ def list_scripts(src: CommandSource):
 
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
-    stop_all_schedule_daemon_threads()
+    schedule_tasks.stop_all_schedule_daemon_threads()
     
     cfg.temp_config = cfg.TempConfig()
     cfg.config = server.load_config_simple(target_class=cfg.Configuration)
@@ -225,12 +134,12 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
     
     try:
-        cfg.temp_config.task.get(task).execute_task(server, tasks.Hooks.undefined.value, var_dict=env_dict,
+        cfg.temp_config.task.get(task).execute_task(server, mount.Hooks.undefined.value, var_dict=env_dict,
                                                     obj_dict=env_dict)
         src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
     except Exception as e:
         server.logger.exception(
-            f'Unexpected exception when executing task {task}, hook {tasks.Hooks.undefined.value}, '
+            f'Unexpected exception when executing task {task}, hook {mount.Hooks.undefined.value}, '
             f'task_type {cfg.temp_config.task.get(task).task_type}, command {cfg.temp_config.task.get(task).command}',
             e)
 
@@ -263,20 +172,20 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
                         with open(cmd_file_path, 'r') as command_file:
                             command_file_content = command_file.read()
                         # 创建task
-                        create_task(task.get('task_type'), command_file_content, task.get('name'),
-                                    server.get_plugin_command_source(),
-                                    server, created_by=script)
+                        tasks.create_task(task.get('task_type'), command_file_content, task.get('name'),
+                                          server.get_plugin_command_source(),
+                                          server, created_by=script)
                     else:
                         # 创建task
-                        create_task(task.get('task_type'), task.get('command'), task.get('name'),
-                                    server.get_plugin_command_source(),
-                                    server, created_by=script)
+                        tasks.create_task(task.get('task_type'), task.get('command'), task.get('name'),
+                                          server.get_plugin_command_source(),
+                                          server, created_by=script)
                     
                     if task.get('hooks') is None:
                         continue
                     for hook in task.get('hooks'):
                         # 挂载
-                        mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
+                        mount.mount_task(hook, task.get('name'), server.get_plugin_command_source(), server)
             
             if content.get('schedule_tasks') is not None:
                 for schedule in content.get('schedule_tasks'):
@@ -302,22 +211,22 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
                         with open(cmd_file_path, 'r') as command_file:
                             command_file_content = command_file.read()
                         # 创建task
-                        create_task(schedule.get('task_type'), command_file_content, schedule.get('name'),
-                                    server.get_plugin_command_source(),
-                                    server, created_by=script, is_schedule=True,
-                                    exec_interval=schedule.get('exec_interval'))
+                        tasks.create_task(schedule.get('task_type'), command_file_content, schedule.get('name'),
+                                          server.get_plugin_command_source(),
+                                          server, created_by=script, is_schedule=True,
+                                          exec_interval=schedule.get('exec_interval'))
                     else:
                         # 创建task
-                        create_task(schedule.get('task_type'), schedule.get('command'), schedule.get('name'),
-                                    server.get_plugin_command_source(),
-                                    server, created_by=script, is_schedule=True,
-                                    exec_interval=schedule.get('exec_interval'))
+                        tasks.create_task(schedule.get('task_type'), schedule.get('command'), schedule.get('name'),
+                                          server.get_plugin_command_source(),
+                                          server, created_by=script, is_schedule=True,
+                                          exec_interval=schedule.get('exec_interval'))
                     
                     if schedule.get('hooks') is None:
                         continue
                     for hook in schedule.get('hooks'):
                         # 挂载
-                        mount_task(hook, schedule.get('name'), server.get_plugin_command_source(), server)
+                        mount.mount_task(hook, schedule.get('name'), server.get_plugin_command_source(), server)
     except Exception as e:
         server.logger.exception(f'Unexpected exception when parse or apply scripts {os.path.basename(script)}! Please '
                                 f'check your scripts.', e)
@@ -380,7 +289,8 @@ def on_load(server: PluginServerInterface, old_module):
                     .then(
                         GreedyText('command')
                         .requires(lambda src: src.has_permission(3))
-                        .runs(lambda src, ctx: create_task(ctx['task_type'], ctx['command'], ctx['name'], src, server))
+                        .runs(lambda src, ctx: tasks.create_task(ctx['task_type'], ctx['command'], ctx['name'], src,
+                                                                 server))
                     )
                 )
             )
@@ -396,9 +306,9 @@ def on_load(server: PluginServerInterface, old_module):
                         .then(
                             GreedyText('command')
                             .requires(lambda src: src.has_permission(3))
-                            .runs(lambda src, ctx: create_task(ctx['task_type'], ctx['command'], ctx['name'], src,
-                                                               server, is_schedule=True,
-                                                               exec_interval=ctx['exec_interval']))
+                            .runs(lambda src, ctx: tasks.create_task(ctx['task_type'], ctx['command'], ctx['name'], src,
+                                                                     server, is_schedule=True,
+                                                                     exec_interval=ctx['exec_interval']))
                         )
                     )
                 )
@@ -411,7 +321,7 @@ def on_load(server: PluginServerInterface, old_module):
                 .then(
                     Text('hook')
                     .requires(lambda src: src.has_permission(3))
-                    .runs(lambda src, ctx: mount_task(ctx['hook'], ctx['task'], src, server))
+                    .runs(lambda src, ctx: mount.mount_task(ctx['hook'], ctx['task'], src, server))
                 )
             )
         )
@@ -422,7 +332,7 @@ def on_load(server: PluginServerInterface, old_module):
                 .then(
                     Text('hook')
                     .requires(lambda src: src.has_permission(3))
-                    .runs(lambda src, ctx: unmount_task(ctx['hook'], ctx['task'], src, server))
+                    .runs(lambda src, ctx: mount.unmount_task(ctx['hook'], ctx['task'], src, server))
                 )
             )
         )
@@ -431,7 +341,7 @@ def on_load(server: PluginServerInterface, old_module):
             .then(
                 Text('task')
                 .requires(lambda src: src.has_permission(3))
-                .runs(lambda src, ctx: delete_task(ctx['task'], src, server))
+                .runs(lambda src, ctx: tasks.delete_task(ctx['task'], src, server))
             )
         )
         .then(
@@ -470,55 +380,55 @@ def on_load(server: PluginServerInterface, old_module):
         )
     )
     
-    trigger_hooks(tasks.Hooks.on_plugin_loaded, server,
+    trigger_hooks(mount.Hooks.on_plugin_loaded, server,
                   {'server': process_arg_server(server), 'old_module': old_module})
 
 
 def on_unload(server: PluginServerInterface):
-    stop_all_schedule_daemon_threads()
+    schedule_tasks.stop_all_schedule_daemon_threads()
     
-    trigger_hooks(tasks.Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
+    trigger_hooks(mount.Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
     server.save_config_simple(cfg.config)
 
 
 def on_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(tasks.Hooks.on_info, server, {'server': process_arg_server(server), 'info': info})
+    trigger_hooks(mount.Hooks.on_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_user_info(server: PluginServerInterface, info: Info):
-    trigger_hooks(tasks.Hooks.on_user_info, server, {'server': process_arg_server(server), 'info': info})
+    trigger_hooks(mount.Hooks.on_user_info, server, {'server': process_arg_server(server), 'info': info})
 
 
 def on_player_joined(server: PluginServerInterface, player: str, info: Info):
-    trigger_hooks(tasks.Hooks.on_player_joined, server,
+    trigger_hooks(mount.Hooks.on_player_joined, server,
                   {'server': process_arg_server(server), 'info': info, 'player': player})
 
 
 def on_player_left(server: PluginServerInterface, player: str):
-    trigger_hooks(tasks.Hooks.on_player_left, server, {'server': process_arg_server(server), 'player': player})
+    trigger_hooks(mount.Hooks.on_player_left, server, {'server': process_arg_server(server), 'player': player})
 
 
 def on_server_start(server: PluginServerInterface):
-    trigger_hooks(tasks.Hooks.on_server_starting, server, {'server': process_arg_server(server)})
+    trigger_hooks(mount.Hooks.on_server_starting, server, {'server': process_arg_server(server)})
 
 
 def on_server_startup(server: PluginServerInterface):
-    trigger_hooks(tasks.Hooks.on_server_started, server, {'server': process_arg_server(server)})
+    trigger_hooks(mount.Hooks.on_server_started, server, {'server': process_arg_server(server)})
 
 
 def on_server_stop(server: PluginServerInterface, return_code: int):
     if return_code != 0:
-        trigger_hooks(tasks.Hooks.on_server_crashed, server,
+        trigger_hooks(mount.Hooks.on_server_crashed, server,
                       {'server': process_arg_server(server), 'return_code': return_code})
     else:
-        trigger_hooks(tasks.Hooks.on_server_stopped, server,
+        trigger_hooks(mount.Hooks.on_server_stopped, server,
                       {'server': process_arg_server(server), 'return_code': return_code})
 
 
 def on_mcdr_start(server: PluginServerInterface):
-    trigger_hooks(tasks.Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
+    trigger_hooks(mount.Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 
 
 def on_mcdr_stop(server: PluginServerInterface):
-    trigger_hooks(tasks.Hooks.on_mcdr_stopped, server, {'server': process_arg_server(server)})
+    trigger_hooks(mount.Hooks.on_mcdr_stopped, server, {'server': process_arg_server(server)})
