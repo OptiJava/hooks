@@ -144,6 +144,11 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
             e)
 
 
+def clear_tasks(server: PluginServerInterface, src: CommandSource):
+    for tsk in cfg.temp_config.task.copy().keys():
+        tasks.delete_task(tsk, src, server)
+
+
 def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
     try:
         # 读取
@@ -286,6 +291,7 @@ def on_load(server: PluginServerInterface, old_module):
                 Text('name')
                 .then(
                     Text('task_type')
+                    .suggests(lambda: tasks.TaskType.__members__)
                     .then(
                         GreedyText('command')
                         .requires(lambda src: src.has_permission(3))
@@ -303,6 +309,7 @@ def on_load(server: PluginServerInterface, old_module):
                     Integer('exec_interval')
                     .then(
                         Text('task_type')
+                        .suggests(lambda: tasks.TaskType.__members__)
                         .then(
                             GreedyText('command')
                             .requires(lambda src: src.has_permission(3))
@@ -318,8 +325,10 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('mount')
             .then(
                 Text('task')
+                .suggests(lambda: cfg.temp_config.task.keys())
                 .then(
                     Text('hook')
+                    .suggests(lambda: mount.Hooks.__members__)
                     .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: mount.mount_task(ctx['hook'], ctx['task'], src, server))
                 )
@@ -329,8 +338,10 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('unmount')
             .then(
                 Text('task')
+                .suggests(lambda: cfg.temp_config.task.keys())
                 .then(
                     Text('hook')
+                    .suggests(lambda: mount.Hooks.__members__)
                     .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: mount.unmount_task(ctx['hook'], ctx['task'], src, server))
                 )
@@ -340,6 +351,7 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('delete')
             .then(
                 Text('task')
+                .suggests(lambda: cfg.temp_config.task.keys())
                 .requires(lambda src: src.has_permission(3))
                 .runs(lambda src, ctx: tasks.delete_task(ctx['task'], src, server))
             )
@@ -371,12 +383,18 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('run')
             .then(
                 Text('task')
+                .suggests(lambda: cfg.temp_config.task.keys())
                 .then(
                     GreedyText('env')
                     .requires(lambda src: src.has_permission(3))
                     .runs(lambda src, ctx: man_run_task(ctx['task'], ctx['env'], src, server))
                 )
             )
+        )
+        .then(
+            Literal('clear')
+            .requires(lambda src: src.has_permission(3))
+            .runs(lambda src: clear_tasks(server, src))
         )
     )
     

@@ -37,7 +37,8 @@ class ScheduleTask(tasks.Task, AThread):
                 if self.stop_event.is_set():
                     return
                 sleep(1.0)
-            self.execute_task(self.server_inst, 'schedule')
+            if cfg.config.automatically:
+                self.execute_task(self.server_inst, 'schedule')
 
 
 def stop_all_schedule_daemon_threads():
