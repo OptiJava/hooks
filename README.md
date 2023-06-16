@@ -8,11 +8,26 @@
 
 ## 目的
 
+hooks插件可以为脚本提供一系列的“钩子”（也就是hooks），让mcdr自动根据某些条件触发脚本，还提供了许多接口，让脚本的可定制化程度更高
+
 有时，我们想要使用shell脚本管理服务器，但是不方便去让mc服务器全自动触发这些shell脚本，这个插件就是为了能更方便的使用各种脚本全自动维护/管理服务器，而无需为此特意编写一个mcdr插件，无需重复造轮子
 
-他可以为shell脚本提供一系列的“钩子”（也就是hooks），还有许多接口，让脚本的可定制化程度更高
+甚至还可以用这个来调试，比如说你的mcdr出bug了，此时你想查看一下`server.is_server_running()`的返回值是什么，但是编写一个插件然后`print(server.is_server_running())`太麻烦了。这时候只需要`!!hooks create test1 server_command say {$server_func_is_server_running}`然后`!!hooks mount test1 on_user_info`然后就可以看到`is_server_running()`函数的结果了
 
-## 使用方法
+总之玩法很多（
+
+## hooks脚本相比mcdr插件的优势与劣势
+
+优势：
+- 可以非常方便的热插拔各种任务以及任务被触发的条件
+- 使简单的脚本任务，编写起来更加简单，API的使用也更加简单（？
+- 原生支持多种类型的脚本，例如`shell`，使服务器管理更加方便
+
+劣势：
+- 不如mcdr插件的可扩展性高
+- 复杂的脚本任务，编写起来也更加困难，所以编写复杂的任务还不如编写mcdr插件（（
+
+## 基本用法
 
 ### 几个概念
 
@@ -38,9 +53,11 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 
 手动应用就是你自己打指令`!!hooks create ...`之类的，脚本自动应用就是插件加载脚本后自动解析脚本，然后根据脚本内容自动创建task，挂载之类的
 
+两种应用方式本质上是相同的，只不过脚本自动应用手速更快（
+
 ### 应用方式
 
-分为两种：手动应用和脚本自动应用，先介绍手动应用
+分为两种：手动应用和脚本自动应用
 
 #### 手动应用
 
@@ -53,6 +70,8 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 - `command` 要执行的指令，例如`./cleanup.sh`或`echo awa`或`say hello`或`!!qb make auto_backup`（写啥指令取决于你的任务类型，注意别写错了）
 
 `!!hooks mount <task> <hook>`
+
+- 挂载一个任务到一个hook
 
 - `task` 要挂载的命令的名字
 - `hook` 要挂载到的钩子
@@ -80,7 +99,17 @@ Apply和加载有区别，Apply是指：**插件创建Task、挂载Task的操作
 
 - 从一个hook卸载一个task
 
-**注意：每一次!!hooks reload或者重载插件都会将所有task以及挂载信息删除，然后重新根据脚本进行应用，也就是说你手动应用的是留不住的，重载就没了，强烈建议写yaml脚本**
+**注意：每一次`!!hooks reload`或者重载插件都会将所有task以及挂载信息删除，然后重新根据脚本进行应用，也就是说你手动应用的是留不住的，重载就没了，强烈建议写yaml脚本**
+
+`!!hooks schedule <name> <exec_interval> <task_type> <command>`
+
+- 创建一个定时任务
+- 定时任务就是隔一段时间执行一次的任务，每一个定时任务都会被放到一个单独的线程调度，线程名`hooks - schedule_task_daemon(<任务名>)`，可以使用`!!MCDR status`查看
+
+- `<name>`任务名字，定时任务本质上和任务一样，只不过多了执行间隔的属性
+- `<exec_interval>`执行间隔，单位秒，必须是整数
+- `<task_type>`任务类型
+- `<command>`指令
 
 #### 脚本自动应用
 
@@ -105,20 +134,6 @@ tasks:  # 普通任务
 
 将其命名为`<脚本名字>.yaml`，并且放到`config/hooks/scripts`文件夹或子文件夹中
 
-### 定时任务（`schedule_task`）
-
-定时任务就是隔一段时间执行一次的任务
-
-每一个定时任务都会被放到一个单独的线程调度，线程名`hooks - schedule_task_daemon(<任务名>)`，可以使用`!!MCDR status`查看
-
-#### 指令
-
-`!!hooks schedule <name> <exec_interval> <task_type> <command>`
-- `<name>`任务名字，定时任务本质上和任务一样，只不过多了执行间隔的属性
-- `<exec_interval>`执行间隔，单位秒，必须是整数
-- `<task_type>`任务类型
-- `<command>`指令
-
 ### 其他指令
 
 `!!hooks list mount`
@@ -127,10 +142,16 @@ tasks:  # 普通任务
 `!!hooks list task`
 - 显示所有被创建的task
 
+`!!hooks list scripts`
+- 显示所有被加载的脚本
+
 `!!hooks run <task> <env>`
 - 手动执行任务（跟挂没挂载没关系）
 - `<task>` 任务名
 - `<env>` 参数列表（具体用法往下看），必须用`json`格式
+
+`!!hooks clear`
+- 一键清除所有task（别问我有啥用
 
 ## 高级用法
 
@@ -214,17 +235,6 @@ def on_mcdr_start(server: PluginServerInterface):
     trigger_hooks(Hooks.on_mcdr_started, server, {'server': process_arg_server(server)})
 ``````
 这样的代码，先看函数名`on_mcdr_start`，就能大致判断这块代码负责触发`on_mcdr_started`，再看`trigger_hooks(...)`，括号里面的最后一个参数是一个`dict`，只有一个`server`键对值，说明最终脚本可以访问到的参数全都在`PluginServerInterface`类中，然后看就完了（（（（逃
-
-## hooks脚本相比mcdr插件的优势与劣势
-
-优势：
-- 可以非常方便的热插拔各种任务以及任务被触发的条件
-- 使简单的脚本任务，编写起来更加简单，API的使用也更加简单（？
-- 原生支持多种类型的脚本，例如`shell`，使服务器管理更加方便
-
-劣势：
-- 不如mcdr插件的可扩展性高
-- 复杂的脚本任务，编写起来也更加困难，所以编写复杂的任务还不如编写mcdr插件（（
 
 ## 实例
 
