@@ -147,6 +147,24 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
 def clear_tasks(server: PluginServerInterface, src: CommandSource):
     for tsk in cfg.temp_config.task.copy().keys():
         tasks.delete_task(tsk, src, server)
+        
+
+@new_thread('hooks - run_command')
+def run_command(command: str, task_type: str, server: PluginServerInterface, src: CommandSource):
+    try:
+        task_type_var1: tasks.TaskType = tasks.TaskType(task_type)
+    except ValueError:
+        src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
+        return
+    
+    if task_type_var1 == tasks.TaskType.shell_command:
+        os.system(command)
+    elif task_type_var1 == tasks.TaskType.server_command:
+        server.execute(command)
+    elif task_type_var1 == tasks.TaskType.mcdr_command:
+        server.execute_command(command)
+    elif task_type_var1 == tasks.TaskType.python_code:
+        exec(command)
 
 
 def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
@@ -395,6 +413,18 @@ def on_load(server: PluginServerInterface, old_module):
             Literal('clear')
             .requires(lambda src: src.has_permission(3))
             .runs(lambda src: clear_tasks(server, src))
+        )
+        .then(
+            Literal('run_command')
+            .then(
+                Text('task_type')
+                .suggests(lambda: tasks.TaskType.__members__)
+                .then(
+                    GreedyText('command')
+                    .requires(lambda src: src.has_permission(3))
+                    .runs(lambda src, ctx: run_command(ctx['command'], ctx['task_type'], server, src))
+                )
+            )
         )
     )
     
