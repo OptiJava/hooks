@@ -3,9 +3,10 @@ import time
 from enum import Enum
 from io import StringIO
 
-from mcdreforged.api.all import *
+from mcdreforged.api.all import CommandSource, PluginServerInterface, RTextMCDRTranslation, new_thread
 
 from hooks import config as cfg, mount as mount, schedule_tasks as schedule_tasks
+import hooks.logger.logger as logger
 
 
 class TaskType(Enum):
@@ -35,8 +36,7 @@ class Task:
     
     @new_thread('hooks - execute')
     def execute_task(self, server: PluginServerInterface, hook: str, var_dict: dict = None, obj_dict: dict = None):
-        server.logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}, command: {self.command}')
-        server.logger.debug(f'objects_dict: {str(var_dict)}')
+        logger.debug(f'Executing task: {self.task_name}, task_type: {self.task_type}', server)
         
         start_time = time.time()
         
@@ -98,8 +98,8 @@ class Task:
                 else:
                     exec(self.command, {}, locals())
         
-        server.logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
-                            f'command: {self.command}, costs {time.time() - start_time} seconds.')
+        logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
+                     f'costs {time.time() - start_time} seconds.', server)
 
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,

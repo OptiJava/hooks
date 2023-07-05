@@ -1,6 +1,6 @@
 from enum import Enum
 
-from mcdreforged.api.all import *
+from mcdreforged.api.all import CommandSource, PluginServerInterface, RTextMCDRTranslation
 
 from hooks import config as cfg
 

@@ -8,6 +8,8 @@ class Configuration(Serializable):
         super().__init__(**kwargs)
     
     automatically: bool = True
+    
+    debug: bool = False
 
 
 class TempConfig:

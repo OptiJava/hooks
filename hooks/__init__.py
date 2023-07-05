@@ -11,6 +11,7 @@ import hooks.mount as mount
 import hooks.schedule_tasks as schedule_tasks
 import hooks.tasks as tasks
 import hooks.utils as utils
+import hooks.logger.logger as logger
 from hooks.utils import process_arg_server
 
 scripts_folder: str = ''
@@ -21,8 +22,6 @@ def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict
         return
     
     try:
-        server.logger.debug(f'Triggered hooks {hook.value}')
-        server.logger.debug(f'objects_dict: {str(objects_dict)}')
         if len(cfg.temp_config.hooks.get(hook.value)) != 0:
             _trigger_hooks(hook, server, objects_dict)
     except Exception as e:
@@ -31,6 +30,8 @@ def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict
 
 @new_thread('hooks - trigger')
 def _trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+    logger.debug(f'Triggering hooks {hook.value}', server)
+    
     # 初始化最终变量字典
     finally_var_dict = dict()
     
@@ -112,7 +113,7 @@ def list_scripts(src: CommandSource):
 
 
 def reload_config(src: CommandSource, server: PluginServerInterface):
-    schedule_tasks.stop_all_schedule_daemon_threads()
+    schedule_tasks.stop_all_schedule_daemon_threads(server)
     
     cfg.temp_config = cfg.TempConfig()
     cfg.config = server.load_config_simple(target_class=cfg.Configuration)
@@ -168,6 +169,8 @@ def run_command(command: str, task_type: str, server: PluginServerInterface, src
 
 
 def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
+    logger.debug(f'Prepare for apply script: {script}', server)
+    
     try:
         # 读取
         with open(cfg.temp_config.scripts_list.get(script), 'r') as f:
@@ -250,12 +253,15 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
                     for hook in schedule.get('hooks'):
                         # 挂载
                         mount.mount_task(hook, schedule.get('name'), server.get_plugin_command_source(), server)
+        logger.debug(f'{script} apply successfully.', server)
     except Exception as e:
         server.logger.exception(f'Unexpected exception when parse or apply scripts {os.path.basename(script)}! Please '
                                 f'check your scripts.', e)
 
 
 def load_scripts(server: PluginServerInterface):
+    logger.debug('Loading scripts...', server)
+    
     if not os.path.isdir(scripts_folder):
         # 创建脚本目录
         os.makedirs(scripts_folder)
@@ -433,7 +439,7 @@ def on_load(server: PluginServerInterface, old_module):
 
 
 def on_unload(server: PluginServerInterface):
-    schedule_tasks.stop_all_schedule_daemon_threads()
+    schedule_tasks.stop_all_schedule_daemon_threads(server)
     
     trigger_hooks(mount.Hooks.on_plugin_unloaded, server, {'server': process_arg_server(server)})
     
