@@ -1,6 +1,6 @@
 {
 	"id": "hooks",
-	"version": "2.0.2",
+	"version": "2.1.0",
 	"name": "hooks",
 	"description": {
 		"en_us": "Allow MCDR to trigger custom scripts under specific conditions.",
