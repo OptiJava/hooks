@@ -132,7 +132,7 @@ tasks:  # 普通任务
       - on_user_info  # 定时任务也可以被挂载哟~ 
 ``````
 
-将其命名为`<脚本名字>.yaml`，并且放到`config/hooks/scripts`文件夹或子文件夹中
+将其命名为`<脚本名字>.yaml`，并且放到`config/hooks/scripts`文件夹或子文件夹中（`scripts`文件夹中以`_`结尾的子文件夹会被忽略）
 
 ### 其他指令
 
