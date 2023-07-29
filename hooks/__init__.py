@@ -274,7 +274,10 @@ def load_scripts(server: PluginServerInterface):
         for file in os.listdir(root_dir):
             file_path = os.path.join(root_dir, file)
             
-            if os.path.isdir(file_path) and not file_path.endswith('_'):
+            if os.path.isdir(file_path):
+                if file_path.endswith('_'):
+                    logger.debug('Ignored folder ' + str(file_path), server)
+                    continue
                 # 遍历子文件夹
                 _files_in_a_folder.extend(list_all_files(file_path))
             if os.path.isfile(file_path) and (file_path.endswith('.yaml') or file_path.endswith('.yml')):
