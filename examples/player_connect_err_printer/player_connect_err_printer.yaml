@@ -1,0 +1,6 @@
+tasks:
+  - name: player_connect_err_printer
+    task_type: python_code
+    command_file: '{hooks_config_path}/scripts/player_connect_err_printer/script.py'
+    hooks:
+      - on_info

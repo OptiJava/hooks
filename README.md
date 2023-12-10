@@ -238,6 +238,8 @@ def on_mcdr_start(server: PluginServerInterface):
 
 ## 实例
 
+> 所有示例代码都在`examples`目录中
+
 ### 1. 玩家非正常退出报告
 
 首先编写python代码：
