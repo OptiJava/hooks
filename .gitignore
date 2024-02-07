@@ -1,5 +1,4 @@
 .idea/
-debug.sh
 
 hooks/__pycache__/
 test/.pytest_cache/
