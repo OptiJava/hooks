@@ -173,8 +173,9 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
     
     try:
         # 读取
+        _yml = yaml.YAML()
         with open(cfg.temp_config.scripts_list.get(script), 'r') as f:
-            content: dict[str, Union[str, Union[list, dict]]] = yaml.load(f.read(), Loader=yaml.Loader)
+            content: dict[str, Union[str, Union[list, dict]]] = _yml.load(f)  # yaml.load(f.read(), Loader=yaml.Loader)
         
         if content is not None:
             if content.get('tasks') is not None:
