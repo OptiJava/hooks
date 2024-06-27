@@ -123,7 +123,7 @@ tasks:  # 普通任务
     hooks:   # 要挂载到的hook，必须是数组
       - on_server_started
       - on_mcdr_started
- schedule_tasks:  # 定时任务声明
+schedule_tasks:  # 定时任务声明
   - name: ababababa  # 名字
     task_type: server_command  # 任务类型
     command: say 6  # 指令
