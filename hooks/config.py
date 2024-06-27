@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Any, Dict
 
 from mcdreforged.api.all import Serializable
 
@@ -37,11 +37,11 @@ class TempConfig:
         self.task = {}
         self.scripts_list = {}
     
-    hooks: dict[str, List[str]]
+    hooks: Dict[str, List[str]]
     
-    task: dict[str, Any]
+    task: Dict[str, Any]
     
-    scripts_list: dict[str, str]
+    scripts_list: Dict[str, str]
     
     schedule_daemon_threads: list = list()
     

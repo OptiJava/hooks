@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Union, Any
+from typing import Union, Any, Dict, List
 
 from ruamel import yaml
 
@@ -17,7 +17,7 @@ from hooks.utils import process_arg_server
 scripts_folder: str = ''
 
 
-def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: Dict[str, Any] = None):
     if not cfg.config.automatically:
         return
     
@@ -29,7 +29,7 @@ def trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict
 
 
 @new_thread('hooks - trigger')
-def _trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: dict[str, Any] = None):
+def _trigger_hooks(hook: mount.Hooks, server: PluginServerInterface, objects_dict: Dict[str, Any] = None):
     logger.debug(f'Triggering hooks {hook.value}', server)
     
     # 初始化最终变量字典
@@ -129,7 +129,7 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
     
     try:
-        env_dict: dict[str, str] = dict(json.loads(env_str))
+        env_dict: Dict[str, str] = dict(json.loads(env_str))
     except Exception as e:
         src.reply(RTextMCDRTranslation('hooks.man_run.illegal_env_json', e))
         return
@@ -175,7 +175,7 @@ def _parse_and_apply_scripts(script: str, server: PluginServerInterface):
         # 读取
         _yml = yaml.YAML()
         with open(cfg.temp_config.scripts_list.get(script), 'r') as f:
-            content: dict[str, Union[str, Union[list, dict]]] = _yml.load(f)  # yaml.load(f.read(), Loader=yaml.Loader)
+            content: Dict[str, Union[str, Union[list, dict]]] = _yml.load(f)  # yaml.load(f.read(), Loader=yaml.Loader)
         
         if content is not None:
             if content.get('tasks') is not None:
@@ -268,9 +268,9 @@ def load_scripts(server: PluginServerInterface):
         os.makedirs(scripts_folder)
         return
     
-    def list_all_files(root_dir) -> list[str]:
+    def list_all_files(root_dir) -> List[str]:
         # 显示一个文件夹及子文件夹中的所有yaml文件
-        _files_in_a_folder: list[str] = []
+        _files_in_a_folder: List[str] = []
         
         for file in os.listdir(root_dir):
             file_path = os.path.join(root_dir, file)
