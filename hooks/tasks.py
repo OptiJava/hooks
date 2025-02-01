@@ -2,6 +2,7 @@ import os
 import time
 from enum import Enum
 from io import StringIO
+from typing import Dict
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface, RTextMCDRTranslation, new_thread
 
@@ -51,55 +52,59 @@ class Task:
                 f'Task state is not correct! Task: {self.task_name} Hooks: {hook} TaskType: {self.task_type} '
                 f'command: {self.command}')
             return
-        
-        # shell
-        if self.task_type == TaskType.shell_command:
-            # 生成参数
-            command = StringIO()
-            
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command.write('export "')
-                    command.write(str(key))
-                    command.write('"')
-                    command.write('=')
-                    command.write('"')
-                    command.write(str(var_dict.get(key)))
-                    command.write('" && ')
-            command.write(self.command)
-            
-            os.system(command.getvalue())
-        # mc command
-        elif self.task_type == TaskType.server_command:
-            # 替换参数
-            command = self.command
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
-            
-            server.execute(command)
-        # mcdr command
-        elif self.task_type == TaskType.mcdr_command:
-            # 替换参数
-            command = self.command
-            if var_dict is not None:
-                for key in var_dict.keys():
-                    command = command.replace('{$' + key + '}', str(var_dict.get(key)))
-            
-            server.execute_command(command)
-        
-        # python code
-        elif self.task_type == TaskType.python_code:
-            if obj_dict is not None:
-                exec(self.command, {}, obj_dict)
-            else:
-                if var_dict is not None:
-                    exec(self.command, {}, var_dict)
-                else:
-                    exec(self.command, {}, locals())
+
+        execute_known_command(self.task_type, var_dict, obj_dict, self.command, server)
         
         logger.debug(f'Task finished, name: {self.task_name}, task_type: {self.task_type}, '
                      f'costs {time.time() - start_time} seconds.', server)
+
+
+def execute_known_command(task_type: TaskType, var_dict: Dict, obj_dict: Dict, p_command: str, server: PluginServerInterface):
+    # shell
+    if task_type == TaskType.shell_command:
+        # 生成参数
+        command = StringIO()
+
+        if var_dict is not None:
+            for key in var_dict.keys():
+                command.write('export "')
+                command.write(str(key))
+                command.write('"')
+                command.write('=')
+                command.write('"')
+                command.write(str(var_dict.get(key)))
+                command.write('" && ')
+        command.write(p_command)
+
+        os.system(command.getvalue())
+    # mc command
+    elif task_type == TaskType.server_command:
+        # 替换参数
+        command = p_command
+        if var_dict is not None:
+            for key in var_dict.keys():
+                command = command.replace('{$' + key + '}', str(var_dict.get(key)))
+
+        server.execute(command)
+    # mcdr command
+    elif task_type == TaskType.mcdr_command:
+        # 替换参数
+        command = p_command
+        if var_dict is not None:
+            for key in var_dict.keys():
+                command = command.replace('{$' + key + '}', str(var_dict.get(key)))
+
+        server.execute_command(command)
+
+    # python code
+    elif task_type == TaskType.python_code:
+        if obj_dict is not None:
+            exec(p_command, {}, obj_dict)
+        else:
+            if var_dict is not None:
+                exec(p_command, {}, var_dict)
+            else:
+                exec(p_command, {}, locals())
 
 
 def create_task(task_type: str, command: str, name: str, src: CommandSource, server: PluginServerInterface,
