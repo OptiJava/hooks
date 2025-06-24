@@ -269,5 +269,5 @@ tasks:
       - on_info
 ```
 
-上传好脚本后，命令行输入`!!hooks reload`即可awa
+上传好脚本后，命令行输入`!!hooks reload`即可
 
