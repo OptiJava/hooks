@@ -134,7 +134,8 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
 
     try:
-        env_dict: Dict[str, str] = dict(json.loads(env_str))
+        if have_obj_dict is None:
+            env_dict: Dict[str, str] = dict(json.loads(env_str))
     except Exception as e:
         src.reply(RTextMCDRTranslation('hooks.man_run.illegal_env_json', e))
         return
@@ -171,7 +172,7 @@ def run_command(command: str, task_type: str, server: PluginServerInterface, src
 
     temp_tsk1 = tasks.create_task(task_type_var1, command, "temp" + command, server.get_plugin_command_source(), server)
 
-    man_run_task(temp_tsk1, process_objects({'server': process_arg_server(server)}), server.get_plugin_command_source(), server)
+    man_run_task("temp" + command, process_objects({'server': process_arg_server(server)}), server.get_plugin_command_source(), server, have_obj_dict=process_objects({'server': process_arg_server(server)}))
 
     tasks.delete_task("temp" + command, server.get_plugin_command_source(), server)
 
