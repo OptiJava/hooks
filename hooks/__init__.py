@@ -128,7 +128,7 @@ def reload_config(src: CommandSource, server: PluginServerInterface):
     src.reply(RTextMCDRTranslation('hooks.reload.success'))
 
 
-def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServerInterface):
+def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServerInterface, have_obj_dict: dict = None):
     if task not in cfg.temp_config.task.keys():
         src.reply(RTextMCDRTranslation('hooks.man_run.task_not_exist'))
         return
@@ -140,8 +140,12 @@ def man_run_task(task: str, env_str: str, src: CommandSource, server: PluginServ
         return
 
     try:
-        cfg.temp_config.task.get(task).execute_task(server, mount.Hooks.undefined.value, var_dict=env_dict,
-                                                    obj_dict=env_dict)
+        if have_obj_dict is None:
+            cfg.temp_config.task.get(task).execute_task(server, mount.Hooks.undefined.value, var_dict=env_dict,
+                                                        obj_dict=env_dict)
+        else:
+            cfg.temp_config.task.get(task).execute_task(server, mount.Hooks.undefined.value, var_dict=have_obj_dict,
+                                                        obj_dict=have_obj_dict)
         src.reply(RTextMCDRTranslation('hooks.man_run.success', task))
     except Exception as e:
         server.logger.exception(
@@ -163,16 +167,13 @@ def run_command(command: str, task_type: str, server: PluginServerInterface, src
         src.reply(RTextMCDRTranslation('hooks.create.task_type_wrong', task_type))
         return
 
-    ## TODO
+    #TODO
 
-    if task_type_var1 == tasks.TaskType.shell_command:
-        os.system(command)
-    elif task_type_var1 == tasks.TaskType.server_command:
-        server.execute(command)
-    elif task_type_var1 == tasks.TaskType.mcdr_command:
-        server.execute_command(command)
-    elif task_type_var1 == tasks.TaskType.python_code:
-        exec(command)
+    temp_tsk1 = tasks.create_task(task_type_var1, command, "temp" + command, server.get_plugin_command_source(), server)
+
+    man_run_task(temp_tsk1, process_objects({'server': process_arg_server(server)}), server.get_plugin_command_source(), server)
+
+    tasks.delete_task("temp" + command, server.get_plugin_command_source(), server)
 
 
 def _parse_and_apply_scripts(script: str, server: PluginServerInterface):

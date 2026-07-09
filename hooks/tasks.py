@@ -126,7 +126,9 @@ def create_task(task_type: str, command: str, name: str, src: CommandSource, ser
         created_by = str(src)
     
     if not is_schedule:
-        cfg.temp_config.task[name] = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+        temp_tsk = Task(name=name, task_type=tsk_type, command=command, created_by=created_by)
+        cfg.temp_config.task[name] = temp_tsk
+        return temp_tsk
     else:
         if exec_interval <= 0:
             src.reply(RTextMCDRTranslation('hooks.create.exec_interval_invalid', exec_interval))
