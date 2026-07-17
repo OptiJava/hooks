@@ -41,7 +41,7 @@ class ScheduleTask(tasks.Task, AThread):
                 sleep(1.0)
             logger.debug(f'Schedule task {self.task_name} triggered. exec_interval: {self.exec_interval}', self.server_inst)
             if cfg.config.automatically:
-                self.execute_task(self.server_inst, 'schedule')
+                self.execute_task(self.server_inst, 'schedule', {'server': process_arg_server(self.server_inst)})
 
 
 def stop_all_schedule_daemon_threads(server):
