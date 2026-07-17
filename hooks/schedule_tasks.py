@@ -3,6 +3,9 @@ from time import sleep
 
 import hooks.tasks as tasks
 from hooks import config as cfg
+
+from hooks import utils
+
 import hooks.logger.logger as logger
 
 
@@ -41,7 +44,7 @@ class ScheduleTask(tasks.Task, AThread):
                 sleep(1.0)
             logger.debug(f'Schedule task {self.task_name} triggered. exec_interval: {self.exec_interval}', self.server_inst)
             if cfg.config.automatically:
-                self.execute_task(self.server_inst, 'schedule', var_dict={'server': process_arg_server(self.server_inst)}, obj_dict={'server': process_arg_server(self.server_inst)})
+                self.execute_task(self.server_inst, 'schedule', var_dict={'server': utils.process_arg_server(self.server_inst)}, obj_dict={'server': utils.process_arg_server(self.server_inst)})
 
 
 def stop_all_schedule_daemon_threads(server):

@@ -424,7 +424,7 @@ def on_load(server: PluginServerInterface, old_module):
                 .then(
                     GreedyText('env')
                     .requires(lambda src: src.has_permission(3))
-                    .runs(lambda src, ctx: man_run_task(ctx['task'], ctx['env'], src, server))
+                    .runs(lambda src, ctx: man_run_task(ctx['task'], ctx['env'], src, server, have_obj_dict={'server': process_arg_server(server)}))
                 )
             )
         )
